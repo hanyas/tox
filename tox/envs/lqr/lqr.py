@@ -22,57 +22,56 @@ class Initial:
 @struct.dataclass
 class Params:
     # discretization
-    simulation_step: float = 0.01
-    downsampling: int = 10
+    simulation_step: float = struct.field(pytree_node=False, default=0.01)
+    downsampling: int = struct.field(pytree_node=False, default=10)
+
+    # horizon
+    horizon: int = struct.field(pytree_node=False, default=100)
 
     # dimensions
-    state_dim: int = 2
-    action_dim: int = 1
+    state_dim: int = struct.field(pytree_node=False, default=2)
+    action_dim: int = struct.field(pytree_node=False, default=1)
 
-    state_shape: Tuple = (2,)
-    action_shape: Tuple = (1,)
+    state_shape: Tuple = struct.field(pytree_node=False, default=(2,))
+    action_shape: Tuple = struct.field(pytree_node=False, default=(1,))
+    # limits
+    state_space: Box = struct.field(
+        pytree_node=False,
+        default=Box(
+            low=jnp.ones((2,)) * jnp.finfo(jnp.float32).min,
+            high=jnp.ones(2,) * jnp.finfo(jnp.float32).max,
+            shape=(2,),
+        ),
+    )
+
+    observation_space: Box = struct.field(
+        pytree_node=False, default=state_space
+    )
+
+    action_space: Box = struct.field(
+        pytree_node=False,
+        default=Box(
+            low=jnp.ones((1,)) * jnp.finfo(jnp.float32).min,
+            high=jnp.ones((1,)) * jnp.finfo(jnp.float32).max,
+            shape=(1,),
+        ),
+    )
 
     # cost
-    goal: jnp.ndarray = jnp.array([10.0, 10.0])
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e1]))
+    goal: jnp.ndarray = jnp.array([10.0, 0.0])
+    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    # limits
-    state_low: jnp.ndarray = jnp.ones(state_shape) * jnp.finfo(jnp.float32).min
-    state_high: jnp.ndarray = (
-        jnp.ones(state_shape) * jnp.finfo(jnp.float32).max
-    )
-
-    state_space = Box(
-        low=state_low,
-        high=state_high,
-        shape=state_shape,
-    )
-
-    observation_space = state_space
-
-    action_low: jnp.ndarray = (
-        jnp.ones(action_shape) * jnp.finfo(jnp.float32).min
-    )
-    action_high: jnp.ndarray = (
-        jnp.ones(action_shape) * jnp.finfo(jnp.float32).max
-    )
-
-    action_space = Box(
-        low=action_low,
-        high=action_high,
-        shape=action_shape,
-    )
-
     # dynamics
-    A: jnp.ndarray = jnp.array([[1.1, 0.0], [1.0, 1.0]])
-    B: jnp.ndarray = jnp.array([[1.0], [0.0]])
-    c: jnp.ndarray = -A @ goal
-    sigma: jnp.ndarray = 5e-3 * jnp.eye(state_dim)
+    A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
+    B: jnp.ndarray = jnp.array([[0.0], [1.0]])
+    c: jnp.ndarray = jnp.array([0.0, 0.0])
+    sigma: jnp.ndarray = 5e-3 * jnp.eye(2)
 
     # initial state
     init_dist: Initial = Initial(
-        mu=jnp.array([5.0, 5.0]), sigma=1e-2 * jnp.eye(state_dim)
+        mu=jnp.array([0.0, 0.0]), sigma=1e-2 * jnp.eye(2)
     )
 
 
@@ -87,7 +86,10 @@ class LinearQuadratic(Environment):
         return Params()
 
     def dynamics(
-        self, state: jnp.ndarray, action: jnp.ndarray, params: Params
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Params,
     ) -> jnp.ndarray:
         def evolve(i, arg):
             x, u, p = arg
@@ -116,24 +118,46 @@ class LinearQuadratic(Environment):
         )[0]
 
     def dynamics_noise(
-        self, state: jnp.ndarray, action: jnp.ndarray, params: Params
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Params,
     ) -> jnp.ndarray:
         return params.sigma
 
-    def observation(self, state: jnp.ndarray, params: Params) -> jnp.ndarray:
+    def observation(
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Params,
+    ) -> jnp.ndarray:
         raise NotImplementedError
 
     def observation_noise(
-        self, state: jnp.ndarray, action: jnp.ndarray, params: Params
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Params,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
     def cost(
-        self, state: jnp.ndarray, action: jnp.ndarray, params: Params
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Params,
     ) -> float:
         c = (state - params.goal).transpose() @ params.state_cost @ (
             state - params.goal
         ) + action.transpose() @ params.action_cost @ action
+        return c * (params.simulation_step * params.downsampling)
+
+    def final_cost(self, state: jnp.ndarray, params: Params) -> float:
+        c = (
+            (state - params.goal).transpose()
+            @ params.final_state_cost
+            @ (state - params.goal)
+        )
         return c * (params.simulation_step * params.downsampling)
 
     @partial(jit, static_argnums=(0,))
