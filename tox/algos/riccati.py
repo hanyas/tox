@@ -1,5 +1,3 @@
-from typing import Any
-
 from functools import partial
 
 import jax.numpy as jnp
@@ -58,9 +56,7 @@ class LinearPolicy:
     K: jnp.ndarray
     kff: jnp.ndarray
 
-    def __call__(
-        self, time: int, state: jnp.ndarray
-    ) -> jnp.ndarray:
+    def __call__(self, time: int, state: jnp.ndarray) -> jnp.ndarray:
         return self.K[time] @ state + self.kff[time]
 
 
@@ -99,8 +95,7 @@ def _second_order_cost(
         jac(env.cost, 0)(reference.state, reference.action, env_params)
         - hess(env.cost, 0)(reference.state, reference.action, env_params)
         @ reference.state
-        - 2.0
-        * jac(jac(env.cost, 0), 1)(
+        - jac(jac(env.cost, 0), 1)(
             reference.state, reference.action, env_params
         )
         @ reference.action
@@ -109,8 +104,7 @@ def _second_order_cost(
         jac(env.cost, 1)(reference.state, reference.action, env_params)
         - hess(env.cost, 1)(reference.state, reference.action, env_params)
         @ reference.action
-        - 2.0
-        * reference.state.transpose()
+        - reference.state.transpose()
         @ jac(jac(env.cost, 0), 1)(
             reference.state, reference.action, env_params
         )
@@ -170,7 +164,7 @@ def _backward_pass(
         K = -Quu_inv @ Qux
         kff = -0.5 * Quu_inv @ qu
 
-        Vxx = Qxx + Qux.transpose() * K
+        Vxx = Qxx + Qux.transpose() @ K
         vx = qx + 2.0 * kff.transpose() @ Qux
 
         return [Vxx, vx], [K, kff]
@@ -191,9 +185,9 @@ def solver(
     env_params: Params,
 ) -> LinearPolicy:
 
-    # create a reference trajectory to extract matrices through differentiation
-    # this operation is not necessary, one could just read the matrices out,
-    # but we want to highlight the general case using JAX
+    # Create a reference trajectory to extract matrices through auto-diff.
+    # This operation is not necessary, one could just read the matrices out,
+    # but we want to highlight the general case using JAX.
 
     reference = Trajectory(
         state=jnp.zeros((env_params.horizon + 1, env_params.state_dim)),
