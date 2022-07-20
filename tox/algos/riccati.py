@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 from functools import partial
 
 import jax.numpy as jnp
@@ -10,13 +12,10 @@ from jax import jacfwd
 from jax import jit, vmap
 from jax.lax import scan
 
-from flax import struct
-
-from tox.envs import Environment, Params
+from tox.envs import Environment, Parameters
 
 
-@struct.dataclass
-class Trajectory:
+class Trajectory(NamedTuple):
     state: jnp.ndarray
     action: jnp.ndarray
 
@@ -29,14 +28,12 @@ class Trajectory:
         return Trajectory(self.state[:-1], self.action)
 
 
-@struct.dataclass
-class FinalQuadraticCost:
+class FinalQuadraticCost(NamedTuple):
     Cxx: jnp.ndarray
     cx: jnp.ndarray
 
 
-@struct.dataclass
-class QuadraticCost:
+class QuadraticCost(NamedTuple):
     Cxx: jnp.ndarray
     Cuu: jnp.ndarray
     Cxu: jnp.ndarray
@@ -44,15 +41,12 @@ class QuadraticCost:
     cu: jnp.ndarray
 
 
-@struct.dataclass
-class LinearDynamics:
+class LinearDynamics(NamedTuple):
     A: jnp.ndarray
     B: jnp.ndarray
-    c: jnp.ndarray
 
 
-@struct.dataclass
-class LinearPolicy:
+class LinearPolicy(NamedTuple):
     K: jnp.ndarray
     kff: jnp.ndarray
 
@@ -62,7 +56,7 @@ class LinearPolicy:
 
 def _second_order_final_cost(
     env: Environment,
-    env_params: Params,
+    env_params: Parameters,
     state: jnp.array,
 ) -> FinalQuadraticCost:
     Cxx = 0.5 * hess(env.final_cost, 0)(state, env_params)
@@ -78,7 +72,7 @@ def _second_order_final_cost(
 @partial(vmap, in_axes=(None, None, 0))
 def _second_order_cost(
     env: Environment,
-    env_params: Params,
+    env_params: Parameters,
     reference: Trajectory,
 ) -> QuadraticCost:
     Cxx = 0.5 * hess(env.cost, 0)(
@@ -116,18 +110,12 @@ def _second_order_cost(
 @partial(vmap, in_axes=(None, None, 0))
 def _first_order_dynamics(
     env: Environment,
-    env_params: Params,
+    env_params: Parameters,
     reference: Trajectory,
 ) -> LinearDynamics:
     A = jacfwd(env.dynamics, 0)(reference.state, reference.action, env_params)
     B = jacfwd(env.dynamics, 1)(reference.state, reference.action, env_params)
-    c = (
-        env.dynamics(reference.state, reference.action, env_params)
-        - A @ reference.state
-        - B @ reference.action
-    )
-
-    return LinearDynamics(A, B, c)
+    return LinearDynamics(A, B)
 
 
 def _backward_pass(
@@ -145,10 +133,10 @@ def _backward_pass(
         quadratic_cost.cx,
         quadratic_cost.cu,
     )
-    A, B, c = linear_dynamics.A, linear_dynamics.B, linear_dynamics.c
+    A, B = linear_dynamics.A, linear_dynamics.B
 
     def backwards(carry, params):
-        Cxx, Cuu, Cxu, cx, cu, A, B, c = params
+        Cxx, Cuu, Cxu, cx, cu, A, B = params
 
         Vxx, vx = carry
 
@@ -156,8 +144,8 @@ def _backward_pass(
         Quu = Cuu + B.transpose() @ Vxx @ B
         Qux = Cxu.transpose() + B.transpose() @ Vxx @ A
 
-        qx = cx + 2.0 * A.transpose() @ Vxx @ c + A.transpose() @ vx
-        qu = cu + 2.0 * B.transpose() @ Vxx @ c + B.transpose() @ vx
+        qx = cx + A.transpose() @ vx
+        qu = cu + B.transpose() @ vx
 
         Quu_inv = jnp.linalg.inv(Quu)
 
@@ -172,7 +160,7 @@ def _backward_pass(
     K, kff = scan(
         f=backwards,
         init=[fCxx, fcx],
-        xs=(Cxx, Cuu, Cxu, cx, cu, A, B, c),
+        xs=(Cxx, Cuu, Cxu, cx, cu, A, B),
         reverse=True,
     )[1]
 
@@ -182,7 +170,7 @@ def _backward_pass(
 @partial(jit, static_argnums=(0,))
 def solver(
     env: Environment,
-    env_params: Params,
+    env_params: Parameters,
 ) -> LinearPolicy:
 
     # Create a reference trajectory to extract matrices through auto-diff.
@@ -190,8 +178,8 @@ def solver(
     # but we want to highlight the general case using JAX.
 
     reference = Trajectory(
-        state=jnp.zeros((env_params.horizon + 1, env_params.state_dim)),
-        action=jnp.zeros((env_params.horizon, env_params.action_dim)),
+        state=jnp.zeros((env.horizon + 1, env.state_dim)),
+        action=jnp.zeros((env.horizon, env.action_dim)),
     )
 
     # get quadratic cost around ref traj
@@ -216,7 +204,7 @@ def solver(
 def rollout(
     rng: jr.PRNGKey,
     env: Environment,
-    env_params: Params,
+    env_params: Parameters,
     policy: LinearPolicy,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
     rng, rng_reset = jr.split(rng, 2)
@@ -234,5 +222,5 @@ def rollout(
     return scan(
         f=episode,
         init=[rng, state],
-        xs=jnp.arange(env_params.horizon),
+        xs=jnp.arange(env.horizon),
     )[1]
