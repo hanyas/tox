@@ -6,7 +6,7 @@ def make(env_id: str):
         raise ValueError(f"{env_id} is not in registered gymnax environments.")
 
     if env_id == "LQR-v0":
-        env = LinearQuadratic()
+        env = LinearQuadratic(step=0.01, downsampling=10, horizon=100)
     else:
         raise ValueError("Environment ID is not registered.")
 

@@ -1,3 +1,3 @@
-from .environment import Environment, Params
+from .environment import Environment, Parameters
 
-from .lqr.lqr import LinearQuadratic
+from .lqr import LinearQuadratic

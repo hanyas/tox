@@ -5,21 +5,20 @@ import jax.random as jr
 import jax.numpy as jnp
 
 
-Params = TypeVar('Params')
+Parameters = TypeVar("Parameters")
 
 
 class Environment(abc.ABC):
-
     @property
-    def default_params(self) -> Params:
-        return Params()
+    def default_params(self) -> Parameters:
+        return Parameters()
 
     @abc.abstractmethod
     def dynamics(
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
@@ -28,7 +27,7 @@ class Environment(abc.ABC):
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
@@ -37,7 +36,7 @@ class Environment(abc.ABC):
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
@@ -46,7 +45,7 @@ class Environment(abc.ABC):
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
@@ -55,12 +54,12 @@ class Environment(abc.ABC):
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> float:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def final_cost(self, state: jnp.ndarray, params: Params) -> float:
+    def final_cost(self, state: jnp.ndarray, params: Parameters) -> float:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -69,12 +68,12 @@ class Environment(abc.ABC):
         key: jr.PRNGKey,
         state: jnp.ndarray,
         action: jnp.ndarray,
-        params: Params,
+        params: Parameters,
     ) -> jnp.ndarray:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def reset(self, key: jr.PRNGKey, params: Params) -> jnp.ndarray:
+    def reset(self, key: jr.PRNGKey, params: Parameters) -> jnp.ndarray:
         raise NotImplementedError
 
     @property
