@@ -38,14 +38,7 @@ class LinearQuadratic(Environment):
     """Linear quadratic system"""
 
     def __init__(self, step=0.01, downsampling=10, horizon=100):
-        super().__init__()
-
-        # discretization
-        self.simulation_step: float = 0.01
-        self.downsampling: int = 10
-
-        # horizon
-        self.horizon: int = 100
+        super().__init__(step, downsampling, horizon)
 
         # dimensions
         self.state_dim: int = 2

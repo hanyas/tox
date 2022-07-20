@@ -9,6 +9,17 @@ Parameters = TypeVar("Parameters")
 
 
 class Environment(abc.ABC):
+
+    @abc.abstractmethod
+    def __init__(self, step, downsampling, horizon):
+
+        # discretization
+        self.simulation_step: float = step
+        self.downsampling: int = downsampling
+
+        # horizon
+        self.horizon: int = horizon
+
     @property
     def default_params(self) -> Parameters:
         return Parameters()
