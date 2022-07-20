@@ -6,6 +6,6 @@ setup(
     author='Hany Abdulsamad',
     author_email='hany@robot-learning.de',
     description='A toolbox for trajectory optimization based on JAX',
-    install_requires=['jax', 'flax', 'matplotlib'],
+    install_requires=['jax', 'matplotlib'],
     zip_safe=False,
 )
