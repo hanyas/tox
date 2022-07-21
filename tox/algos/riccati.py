@@ -12,7 +12,7 @@ from jax import jacfwd
 from jax import jit, vmap
 from jax.lax import scan
 
-from tox.envs import Environment, Parameters
+from tox.envs import StochasticEnv, Parameters
 from tox.utils import Trajectory
 
 
@@ -21,7 +21,7 @@ class FinalQuadraticCost(NamedTuple):
     cx: jnp.ndarray
 
 
-class QuadraticCost(NamedTuple):
+class TransientQuadraticCost(NamedTuple):
     Cxx: jnp.ndarray
     Cuu: jnp.ndarray
     Cxu: jnp.ndarray
@@ -43,8 +43,9 @@ class LinearPolicy(NamedTuple):
         return self.K[time] @ state + self.kff[time]
 
 
+@partial(jit, static_argnums=(0,))
 def _second_order_final_cost(
-    env: Environment,
+    env: StochasticEnv,
     env_params: Parameters,
     state: jnp.array,
 ) -> FinalQuadraticCost:
@@ -58,12 +59,13 @@ def _second_order_final_cost(
     return FinalQuadraticCost(Cxx, cx)
 
 
+@partial(jit, static_argnums=(0,))
 @partial(vmap, in_axes=(None, None, 0))
-def _second_order_cost(
-    env: Environment,
+def _second_order_transient_cost(
+    env: StochasticEnv,
     env_params: Parameters,
     reference: Trajectory,
-) -> QuadraticCost:
+) -> TransientQuadraticCost:
     Cxx = 0.5 * hess(env.cost, 0)(
         reference.state, reference.action, env_params
     )
@@ -93,35 +95,39 @@ def _second_order_cost(
         )
     )
 
-    return QuadraticCost(Cxx, Cuu, Cxu, cx, cu)
+    return TransientQuadraticCost(Cxx, Cuu, Cxu, cx, cu)
 
 
+@partial(jit, static_argnums=(0,))
 @partial(vmap, in_axes=(None, None, 0))
 def _first_order_dynamics(
-    env: Environment,
+    env: StochasticEnv,
     env_params: Parameters,
     reference: Trajectory,
 ) -> LinearDynamics:
     A = jacfwd(env.dynamics, 0)(reference.state, reference.action, env_params)
     B = jacfwd(env.dynamics, 1)(reference.state, reference.action, env_params)
-    c = env.dynamics(reference.state, reference.action, env_params) - (A @ reference.state + B @ reference.action)
+    c = env.dynamics(reference.state, reference.action, env_params) - (
+        A @ reference.state + B @ reference.action
+    )
     return LinearDynamics(A, B, c)
 
 
+@jit
 def _backward_pass(
     final_quadratic_cost: FinalQuadraticCost,
-    quadratic_cost: QuadraticCost,
+    transient_quadratic_cost: TransientQuadraticCost,
     linear_dynamics: LinearDynamics,
 ) -> LinearPolicy:
 
     fCxx, fcx = final_quadratic_cost.Cxx, final_quadratic_cost.cx
 
     Cxx, Cuu, Cxu, cx, cu = (
-        quadratic_cost.Cxx,
-        quadratic_cost.Cuu,
-        quadratic_cost.Cxu,
-        quadratic_cost.cx,
-        quadratic_cost.cu,
+        transient_quadratic_cost.Cxx,
+        transient_quadratic_cost.Cuu,
+        transient_quadratic_cost.Cxu,
+        transient_quadratic_cost.cx,
+        transient_quadratic_cost.cu,
     )
     A, B, c = linear_dynamics.A, linear_dynamics.B, linear_dynamics.c
 
@@ -157,9 +163,8 @@ def _backward_pass(
     return LinearPolicy(K, kff)
 
 
-@partial(jit, static_argnums=(0,))
 def solver(
-    env: Environment,
+    env: StochasticEnv,
     env_params: Parameters,
     reference: Trajectory,
 ) -> LinearPolicy:
@@ -173,7 +178,9 @@ def solver(
         env, env_params, reference.final
     )
 
-    quadratic_cost = _second_order_cost(env, env_params, reference.transient)
+    transient_quadratic_cost = _second_order_transient_cost(
+        env, env_params, reference.transient
+    )
 
     # get linear dynamics around reference
     linear_dynamics = _first_order_dynamics(
@@ -181,7 +188,7 @@ def solver(
     )
 
     return _backward_pass(
-        final_quadratic_cost, quadratic_cost, linear_dynamics
+        final_quadratic_cost, transient_quadratic_cost, linear_dynamics
     )
 
 
@@ -189,7 +196,7 @@ def solver(
 @partial(vmap, in_axes=(0, None, None, None))
 def rollout(
     rng: jr.PRNGKey,
-    env: Environment,
+    env: StochasticEnv,
     env_params: Parameters,
     policy: LinearPolicy,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
@@ -201,12 +208,17 @@ def rollout(
 
         rng, rng_step = jr.split(rng, 2)
         action = policy(time, state)
+        cost = env.cost(state, action, env_params)
         next_state = env.step(rng_step, state, action, env_params)
 
-        return [rng, next_state], [state, action, next_state]
+        return [rng, next_state], [next_state, action, cost]
 
-    return scan(
+    next_state, action, cost = scan(
         f=episode,
         init=[rng, state],
         xs=jnp.arange(env.horizon),
     )[1]
+
+    state = jnp.vstack((state, next_state))
+    total_cost = jnp.sum(cost) + env.final_cost(state[-1], env_params)
+    return state, action, total_cost
