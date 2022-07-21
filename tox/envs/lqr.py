@@ -1,19 +1,10 @@
 from typing import NamedTuple
 
-from functools import partial
-
-from tox.envs.environment import Environment
+from tox.envs.environment import DeterministicEnv
 from tox.envs.spaces import Box
 
-from jax import jit
 import jax.numpy as jnp
-import jax.random as jr
 from jax.lax import fori_loop
-
-
-class InitialDistribution(NamedTuple):
-    mean: jnp.ndarray
-    cov: jnp.ndarray
 
 
 class Parameters(NamedTuple):
@@ -27,15 +18,12 @@ class Parameters(NamedTuple):
     A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
     B: jnp.ndarray = jnp.array([[0.0], [1.0]])
     c: jnp.ndarray = jnp.array([0.0, 0.0])
-    sigma: jnp.ndarray = 5e-3 * jnp.eye(2)
 
     # initial state
-    init_dist: InitialDistribution = InitialDistribution(
-        mean=jnp.array([0.0, 0.0]), cov=1e-2 * jnp.eye(2)
-    )
+    init_state: jnp.ndarray = jnp.array([0.0, 0.0])
 
 
-class LinearQuadratic(Environment):
+class LinearQuadratic(DeterministicEnv):
     """Linear quadratic"""
 
     def __init__(self, step=0.01, downsampling=10, horizon=100):
@@ -94,23 +82,7 @@ class LinearQuadratic(Environment):
             init_val=[state, action, params],
         )[0]
 
-    def dynamics_noise(
-        self,
-        state: jnp.ndarray,
-        action: jnp.ndarray,
-        params: Parameters,
-    ) -> jnp.ndarray:
-        return params.sigma
-
     def observation(
-        self,
-        state: jnp.ndarray,
-        action: jnp.ndarray,
-        params: Parameters,
-    ) -> jnp.ndarray:
-        raise NotImplementedError
-
-    def observation_noise(
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
@@ -137,24 +109,13 @@ class LinearQuadratic(Environment):
         )
         return c * (self.simulation_step * self.downsampling)
 
-    @partial(jit, static_argnums=(0,))
     def step(
         self,
-        key: jr.PRNGKey,
         state: jnp.ndarray,
         action: jnp.ndarray,
         params: Parameters,
     ) -> jnp.ndarray:
-        return jr.multivariate_normal(
-            key=key,
-            mean=self.dynamics(state, action, params),
-            cov=self.dynamics_noise(state, action, params),
-        )
+        return self.dynamics(state, action, params)
 
-    @partial(jit, static_argnums=(0,))
-    def reset(self, key: jr.PRNGKey, params: Parameters) -> jnp.ndarray:
-        return jr.multivariate_normal(
-            key=key,
-            mean=params.init_dist.mean,
-            cov=params.init_dist.cov,
-        )
+    def reset(self, params: Parameters) -> jnp.ndarray:
+        return params.init_state
