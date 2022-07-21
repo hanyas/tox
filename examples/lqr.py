@@ -1,12 +1,15 @@
 import tox
 from time import time
 
+import jax.numpy as jnp
 import jax.random as jr
 from jax import block_until_ready
 
 from jax.config import config
 
 from tox.algos import riccati
+from tox.utils import Trajectory
+
 import matplotlib.pyplot as plt
 
 config.update("jax_enable_x64", True)
@@ -14,8 +17,14 @@ config.update("jax_enable_x64", True)
 rng = jr.PRNGKey(1337)
 env, env_params = tox.make("LQR-v0")
 
+# Create a reference trajectory to extract matrices through auto-diff
+reference = Trajectory(
+        state=jnp.zeros((env.horizon + 1, env.state_dim)),
+        action=jnp.zeros((env.horizon, env.action_dim)),
+    )
+
 start = time()
-policy = riccati.solver(env, env_params)
+policy = riccati.solver(env, env_params, reference)
 
 rng_episodes = jr.split(rng, 100)
 episodes = riccati.rollout(
