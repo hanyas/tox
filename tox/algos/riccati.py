@@ -32,6 +32,7 @@ class QuadraticCost(NamedTuple):
 class LinearDynamics(NamedTuple):
     A: jnp.ndarray
     B: jnp.ndarray
+    c: jnp.ndarray
 
 
 class LinearPolicy(NamedTuple):
@@ -103,7 +104,8 @@ def _first_order_dynamics(
 ) -> LinearDynamics:
     A = jacfwd(env.dynamics, 0)(reference.state, reference.action, env_params)
     B = jacfwd(env.dynamics, 1)(reference.state, reference.action, env_params)
-    return LinearDynamics(A, B)
+    c = env.dynamics(reference.state, reference.action, env_params) - (A @ reference.state + B @ reference.action)
+    return LinearDynamics(A, B, c)
 
 
 def _backward_pass(
@@ -121,10 +123,10 @@ def _backward_pass(
         quadratic_cost.cx,
         quadratic_cost.cu,
     )
-    A, B = linear_dynamics.A, linear_dynamics.B
+    A, B, c = linear_dynamics.A, linear_dynamics.B, linear_dynamics.c
 
     def backwards(carry, params):
-        Cxx, Cuu, Cxu, cx, cu, A, B = params
+        Cxx, Cuu, Cxu, cx, cu, A, B, c = params
 
         Vxx, vx = carry
 
@@ -132,8 +134,8 @@ def _backward_pass(
         Quu = Cuu + B.transpose() @ Vxx @ B
         Qux = Cxu.transpose() + B.transpose() @ Vxx @ A
 
-        qx = cx + A.transpose() @ vx
-        qu = cu + B.transpose() @ vx
+        qx = cx + 2.0 * A.transpose() @ Vxx @ c + A.transpose() @ vx
+        qu = cu + 2.0 * B.transpose() @ Vxx @ c + B.transpose() @ vx
 
         Quu_inv = jnp.linalg.inv(Quu)
 
@@ -148,7 +150,7 @@ def _backward_pass(
     K, kff = scan(
         f=backwards,
         init=[fCxx, fcx],
-        xs=(Cxx, Cuu, Cxu, cx, cu, A, B),
+        xs=(Cxx, Cuu, Cxu, cx, cu, A, B, c),
         reverse=True,
     )[1]
 

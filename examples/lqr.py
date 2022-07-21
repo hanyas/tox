@@ -19,9 +19,9 @@ env, env_params = tox.make("LQR-v0")
 
 # Create a reference trajectory to extract matrices through auto-diff
 reference = Trajectory(
-        state=jnp.zeros((env.horizon + 1, env.state_dim)),
-        action=jnp.zeros((env.horizon, env.action_dim)),
-    )
+    state=jnp.zeros((env.horizon + 1, env.state_dim)),
+    action=jnp.zeros((env.horizon, env.action_dim)),
+)
 
 start = time()
 policy = riccati.solver(env, env_params, reference)

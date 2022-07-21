@@ -26,6 +26,7 @@ class Parameters(NamedTuple):
     # dynamics
     A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
     B: jnp.ndarray = jnp.array([[0.0], [1.0]])
+    c: jnp.ndarray = jnp.array([0.0, 0.0])
     sigma: jnp.ndarray = 5e-3 * jnp.eye(2)
 
     # initial state
@@ -72,7 +73,7 @@ class LinearQuadratic(Environment):
 
             def f(x, u, p):
                 _u = self.action_space.clip(u)
-                return p.A @ x + p.B @ _u
+                return p.A @ x + p.B @ _u + p.c
 
             dt = self.simulation_step
 
