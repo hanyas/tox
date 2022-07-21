@@ -1,4 +1,4 @@
-from typing import Tuple, NamedTuple
+from typing import NamedTuple
 
 from functools import partial
 
@@ -35,17 +35,12 @@ class Parameters(NamedTuple):
 
 
 class LinearQuadratic(Environment):
-    """Linear quadratic system"""
+    """Linear quadratic"""
 
     def __init__(self, step=0.01, downsampling=10, horizon=100):
-        super().__init__(step, downsampling, horizon)
-
-        # dimensions
-        self.state_dim: int = 2
-        self.action_dim: int = 1
-
-        self.state_shape: Tuple = (2,)
-        self.action_shape: Tuple = (1,)
+        super().__init__(
+            step, downsampling, horizon, state_dim=2, action_dim=1
+        )
 
         # limits
         self.state_space: Box = Box(

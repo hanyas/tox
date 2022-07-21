@@ -1,5 +1,5 @@
 import abc
-from typing import TypeVar
+from typing import TypeVar, Tuple
 
 import jax.random as jr
 import jax.numpy as jnp
@@ -9,9 +9,8 @@ Parameters = TypeVar("Parameters")
 
 
 class Environment(abc.ABC):
-
     @abc.abstractmethod
-    def __init__(self, step, downsampling, horizon):
+    def __init__(self, step, downsampling, horizon, state_dim, action_dim):
 
         # discretization
         self.simulation_step: float = step
@@ -19,6 +18,13 @@ class Environment(abc.ABC):
 
         # horizon
         self.horizon: int = horizon
+
+        # dimensions
+        self.state_dim: int = state_dim
+        self.action_dim: int = action_dim
+
+        self.state_shape: Tuple = (state_dim,)
+        self.action_shape: Tuple = (action_dim,)
 
     @property
     def default_params(self) -> Parameters:
