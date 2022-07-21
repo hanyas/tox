@@ -13,19 +13,7 @@ from jax import jit, vmap
 from jax.lax import scan
 
 from tox.envs import Environment, Parameters
-
-
-class Trajectory(NamedTuple):
-    state: jnp.ndarray
-    action: jnp.ndarray
-
-    @property
-    def final(self):
-        return self.state[-1]
-
-    @property
-    def transient(self):
-        return Trajectory(self.state[:-1], self.action)
+from tox.utils import Trajectory
 
 
 class FinalQuadraticCost(NamedTuple):
@@ -171,25 +159,21 @@ def _backward_pass(
 def solver(
     env: Environment,
     env_params: Parameters,
+    reference: Trajectory,
 ) -> LinearPolicy:
 
-    # Create a reference trajectory to extract matrices through auto-diff.
-    # This operation is not necessary, one could just read the matrices out,
-    # but we want to highlight the general case using JAX.
+    # Reference not really needed in LQR.
+    # We use it to show the general case of linearizing
+    # around a trajectory to retrieve dynamics and cost.
 
-    reference = Trajectory(
-        state=jnp.zeros((env.horizon + 1, env.state_dim)),
-        action=jnp.zeros((env.horizon, env.action_dim)),
-    )
-
-    # get quadratic cost around ref traj
+    # get quadratic cost around reference
     final_quadratic_cost = _second_order_final_cost(
         env, env_params, reference.final
     )
 
     quadratic_cost = _second_order_cost(env, env_params, reference.transient)
 
-    # get linear dynamics around ref traj
+    # get linear dynamics around reference
     linear_dynamics = _first_order_dynamics(
         env, env_params, reference.transient
     )
