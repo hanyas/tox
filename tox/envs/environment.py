@@ -40,25 +40,7 @@ class Environment(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def dynamics_noise(
-        self,
-        state: jnp.ndarray,
-        action: jnp.ndarray,
-        params: Parameters,
-    ) -> jnp.ndarray:
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def observation(
-        self,
-        state: jnp.ndarray,
-        action: jnp.ndarray,
-        params: Parameters,
-    ) -> jnp.ndarray:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def observation_noise(
         self,
         state: jnp.ndarray,
         action: jnp.ndarray,
@@ -79,6 +61,31 @@ class Environment(abc.ABC):
     def final_cost(self, state: jnp.ndarray, params: Parameters) -> float:
         raise NotImplementedError
 
+    @property
+    def name(self) -> str:
+        return type(self).__name__
+
+
+class StochasticEnv(Environment, abc.ABC):
+
+    @abc.abstractmethod
+    def dynamics_noise(
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Parameters,
+    ) -> jnp.ndarray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def observation_noise(
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Parameters,
+    ) -> jnp.ndarray:
+        raise NotImplementedError
+
     @abc.abstractmethod
     def step(
         self,
@@ -93,6 +100,18 @@ class Environment(abc.ABC):
     def reset(self, key: jr.PRNGKey, params: Parameters) -> jnp.ndarray:
         raise NotImplementedError
 
-    @property
-    def name(self) -> str:
-        return type(self).__name__
+
+class DeterministicEnv(Environment, abc.ABC):
+
+    @abc.abstractmethod
+    def step(
+        self,
+        state: jnp.ndarray,
+        action: jnp.ndarray,
+        params: Parameters,
+    ) -> jnp.ndarray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def reset(self, params: Parameters) -> jnp.ndarray:
+        raise NotImplementedError
