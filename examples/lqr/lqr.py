@@ -7,9 +7,7 @@ from jax import block_until_ready
 
 from tox.objects import Trajectory
 from tox.utils import runge_kutta
-from tox.solvers import ilqr
-
-from tox.spaces import Box
+from tox.solvers import lqr
 
 import time as clock
 import matplotlib.pyplot as plt
@@ -53,20 +51,6 @@ def double_integrator(
     return A @ state + B @ action + c
 
 
-# limits
-state_space: Box = Box(
-    low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).max,
-    shape=(state_dim,),
-)
-
-action_space: Box = Box(
-    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
-    shape=(action_dim,),
-)
-
-
 def dynamics(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
@@ -89,42 +73,19 @@ def dynamics(
     )
 
 
-init_reference = Trajectory(
+reference = Trajectory(
     state=jnp.zeros((horizon + 1, state_dim)),
     action=jnp.zeros((horizon, action_dim)),
 )
 
-init_policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=jnp.zeros((horizon, action_dim)),
-)
-
-init_state = jnp.array([0., 0.])
-
-options = ilqr.Hyperparameters()
-
 start = clock.time()
-policy, reference, trace = ilqr.solver(
-    final_cost,
-    transient_cost,
-    dynamics,
-    state_space,
-    init_policy,
-    action_space,
-    init_reference,
-    options,
-    init_state,
+policy = lqr.solver(
+    final_cost, transient_cost, dynamics, reference
 )
 
-episode = ilqr.rollout(
-    final_cost,
-    transient_cost,
-    dynamics,
-    state_space,
-    policy,
-    action_space,
-    reference,
-    init_state,
+init_state = jnp.array([0.0, 0.0])
+episode = lqr.rollout(
+    final_cost, transient_cost, dynamics, init_state, policy, reference
 )
 block_until_ready(episode)
 end = clock.time()

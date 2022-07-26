@@ -2,32 +2,60 @@ from jax.config import config
 config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
-from jax.lax import fori_loop
+import jax.random as jr
+
+from jax import jacobian as jac
 from jax import block_until_ready
+
+from jax.lax import fori_loop
+from jax.lax import stop_gradient
+
+from tox.spaces import Box
 
 from tox.objects import Trajectory
 from tox.utils import runge_kutta
 from tox.solvers import ilqr
-
-from tox.spaces import Box
 
 import time as clock
 import matplotlib.pyplot as plt
 
 
 simulation_step = 0.01
-downsampling = 10
+downsampling = 5
 
-horizon = 50
+horizon = 100
 state_dim = 2
 action_dim = 1
 
 
-def final_cost(state: jnp.ndarray) -> float:
-    goal: jnp.ndarray = jnp.array([10.0, 0.0])
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+def cost_features(state):
+    return jnp.array([jnp.cos(state[0]), jnp.sin(state[0]), state[1]])
 
-    c = (state - goal).T @ final_state_cost @ (state - goal)
+
+# I don't know why it works better with this :/
+def linear_cost_approx(state: jnp.ndarray) -> float:
+    def _features_jacobian(state):
+        J = jac(cost_features, 0)
+        j = cost_features(state) - J(state) @ state
+        return J, j
+
+    J, j = _features_jacobian(stop_gradient(state))
+    return J(stop_gradient(state)) @ state + j
+
+
+def final_cost(state: jnp.ndarray) -> float:
+    goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
+    final_state_cost: jnp.ndarray = jnp.diag(
+        jnp.array([1e1, 1e1, 1e-1])
+    )  # in feature space
+
+    state_feat_approx = linear_cost_approx(state)
+    goal_feat = cost_features(goal)
+    c = (
+        (state_feat_approx - goal_feat).T
+        @ final_state_cost
+        @ (state_feat_approx - goal_feat)
+    )
     return c * (simulation_step * downsampling)
 
 
@@ -35,22 +63,37 @@ def transient_cost(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> float:
 
-    goal: jnp.ndarray = jnp.array([10.0, 0.0])
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
+    goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
+    state_cost: jnp.ndarray = jnp.diag(
+        jnp.array([1e1, 1e1, 1e-1])
+    )  # in feature space
+    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3]))
 
-    c = (state - goal).T @ state_cost @ (state - goal)\
-        + action.T @ action_cost @ action
+    state_feat_approx = linear_cost_approx(state)
+    goal_feat = cost_features(goal)
+    c = (state_feat_approx - goal_feat).T @ state_cost @ (
+        state_feat_approx - goal_feat
+    ) + action.T @ action_cost @ action
     return c * (simulation_step * downsampling)
 
 
-def double_integrator(
+def pendulum(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-    A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
-    B: jnp.ndarray = jnp.array([[0.0], [1.0]])
-    c: jnp.ndarray = jnp.array([0.0, 0.0])
-    return A @ state + B @ action + c
+
+    gravity: float = 9.81
+    length: float = 1.0
+    mass: float = 1.0
+    damping: float = 1e-3
+
+    position, velocity = state
+    return jnp.hstack(
+        (
+            velocity,
+            -3.0 * gravity / (2.0 * length) * jnp.sin(position)
+            + 3.0 * (action - damping * velocity) / (mass * length**2),
+        )
+    )
 
 
 # limits
@@ -61,22 +104,23 @@ state_space: Box = Box(
 )
 
 action_space: Box = Box(
-    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
+    low=-2.5 * jnp.ones((action_dim,)),
+    high=2.5 * jnp.ones((action_dim,)),
     shape=(action_dim,),
 )
 
 
 def dynamics(
-    state: jnp.ndarray, action: jnp.ndarray, time: int
+    state: jnp.ndarray,
+    action: jnp.ndarray,
+    time: int,
 ) -> jnp.ndarray:
-
     def _step(t, state):
         next_state = runge_kutta(
             state,
             action,
             time + t * simulation_step,
-            double_integrator,
+            pendulum,
             simulation_step,
         )
         return next_state
@@ -94,12 +138,14 @@ init_reference = Trajectory(
     action=jnp.zeros((horizon, action_dim)),
 )
 
+key = jr.PRNGKey(137)
+
 init_policy = ilqr.LinearPolicy(
     K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=jnp.zeros((horizon, action_dim)),
+    kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([0., 0.])
+init_state = jnp.array([0.0, 0.0])
 
 options = ilqr.Hyperparameters()
 
