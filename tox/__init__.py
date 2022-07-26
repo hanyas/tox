@@ -1,4 +1,2 @@
-from .registration import make, registered_envs
-
-
-__all__ = ["make", "registered_envs"]
+from .solvers import lqr
+from .solvers import ilqr
