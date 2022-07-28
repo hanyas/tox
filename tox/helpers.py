@@ -5,7 +5,7 @@ from functools import partial
 from jax import jacobian as jac
 from jax import hessian as hess
 
-from jax import jit, vmap
+from jax import vmap
 import jax.numpy as jnp
 
 from tox.objects import (
@@ -18,7 +18,6 @@ from tox.objects import (
 from tox.spaces import Box
 
 
-@partial(jit, static_argnums=(0,))
 def quadratize_final_cost(
     final_cost: Callable, state: jnp.ndarray
 ) -> QuadraticFinalCost:
@@ -30,7 +29,6 @@ def quadratize_final_cost(
     return QuadraticFinalCost(Cxx, cx, c0)
 
 
-@partial(jit, static_argnums=(0,))
 @partial(vmap, in_axes=(None, 0, 0))
 def quadratize_transient_cost(
     transient_cost: Callable, reference: Trajectory, time: jnp.ndarray
@@ -52,7 +50,6 @@ def quadratize_transient_cost(
     return QuadraticTransientCost(Cxx, Cuu, Cxu, cx, cu, c0)
 
 
-@partial(jit, static_argnums=(0, ))
 @partial(vmap, in_axes=(None, None, 0, 0))
 def linearize_dynamics(
     dynamics: Callable, state_space: Box, reference: Trajectory, time: jnp.ndarray,
