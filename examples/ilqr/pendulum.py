@@ -1,17 +1,13 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
+# config.update("jax_log_compiles", 1)
 
 import jax.numpy as jnp
 import jax.random as jr
 
-from jax import jacobian as jac
-from jax import block_until_ready
-
 from jax.lax import fori_loop
-from jax.lax import stop_gradient
 
 from tox.spaces import Box
-
 from tox.objects import Trajectory
 from tox.utils import runge_kutta
 from tox.solvers import ilqr
@@ -28,35 +24,18 @@ state_dim = 2
 action_dim = 1
 
 
-def cost_features(state):
-    return jnp.array([jnp.cos(state[0]), jnp.sin(state[0]), state[1]])
-
-
-# I don't know why it works better with this :/
-def linear_cost_approx(state: jnp.ndarray) -> float:
-    def _features_jacobian(state):
-        J = jac(cost_features, 0)
-        j = cost_features(state) - J(state) @ state
-        return J, j
-
-    J, j = _features_jacobian(stop_gradient(state))
-    return J(stop_gradient(state)) @ state + j
+def wrap_angle(x):
+    # wrap angle between [0, 2*pi]
+    return x % (2.0 * jnp.pi)
 
 
 def final_cost(state: jnp.ndarray) -> float:
     goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
-    final_state_cost: jnp.ndarray = jnp.diag(
-        jnp.array([1e1, 1e1, 1e-1])
-    )  # in feature space
+    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
 
-    state_feat_approx = linear_cost_approx(state)
-    goal_feat = cost_features(goal)
-    c = (
-        (state_feat_approx - goal_feat).T
-        @ final_state_cost
-        @ (state_feat_approx - goal_feat)
-    )
-    return c * (simulation_step * downsampling)
+    _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
+    c = (_wrapped - goal).T @ final_state_cost @ (_wrapped - goal)
+    return c
 
 
 def transient_cost(
@@ -64,17 +43,13 @@ def transient_cost(
 ) -> float:
 
     goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
-    state_cost: jnp.ndarray = jnp.diag(
-        jnp.array([1e1, 1e1, 1e-1])
-    )  # in feature space
+    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3]))
 
-    state_feat_approx = linear_cost_approx(state)
-    goal_feat = cost_features(goal)
-    c = (state_feat_approx - goal_feat).T @ state_cost @ (
-        state_feat_approx - goal_feat
-    ) + action.T @ action_cost @ action
-    return c * (simulation_step * downsampling)
+    _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
+    c = (_wrapped - goal).T @ state_cost @ (_wrapped - goal)
+    c += action.T @ action_cost @ action
+    return c
 
 
 def pendulum(
@@ -96,7 +71,6 @@ def pendulum(
     )
 
 
-# limits
 state_space: Box = Box(
     low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
     high=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).max,
@@ -133,24 +107,24 @@ def dynamics(
     )
 
 
+key = jr.PRNGKey(1337)
+
 init_reference = Trajectory(
     state=jnp.zeros((horizon + 1, state_dim)),
     action=jnp.zeros((horizon, action_dim)),
 )
-
-key = jr.PRNGKey(137)
 
 init_policy = ilqr.LinearPolicy(
     K=jnp.zeros((horizon, action_dim, state_dim)),
     kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([0.0, 0.0])
+init_state = jnp.array([0.01, 0.0])
 
 options = ilqr.Hyperparameters()
 
 start = clock.time()
-policy, reference, trace = ilqr.solver(
+policy, reference, _ = ilqr.py_solver(
     final_cost,
     transient_cost,
     dynamics,
@@ -158,9 +132,11 @@ policy, reference, trace = ilqr.solver(
     init_policy,
     action_space,
     init_reference,
-    options,
     init_state,
+    options,
 )
+end = clock.time()
+print("Compilation + Execution Time:", end - start)
 
 episode = ilqr.rollout(
     final_cost,
@@ -172,9 +148,6 @@ episode = ilqr.rollout(
     reference,
     init_state,
 )
-block_until_ready(episode)
-end = clock.time()
-print("Compilation + Execution Time:", end - start)
 
 state, action, total_cost = episode
 
