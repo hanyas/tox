@@ -21,8 +21,8 @@ import time as clock
 import matplotlib.pyplot as plt
 
 
-simulation_step = 0.05
-downsampling = 1
+simulation_step = 0.01
+downsampling = 5
 
 state_dim = 2
 action_dim = 1
@@ -151,11 +151,12 @@ def mpc_rollout(
     state = jnp.vstack((init_state, state))
     return state, action
 
+nb_steps = 100
+horizon = 25
 
 key = jr.PRNGKey(747)
 key, policy_key = jr.split(key, 2)
 
-horizon = 25
 reference = Trajectory(
     state=jnp.zeros((horizon + 1, state_dim)),
     action=jnp.zeros((horizon, action_dim)),
@@ -168,8 +169,6 @@ policy = ilqr.LinearPolicy(
 
 init_state = jnp.array([0.01, -0.01])
 options = ilqr.Hyperparameters(max_iter=25)
-
-nb_steps = 100
 
 start = clock.time()
 state, action = mpc_rollout(
@@ -189,13 +188,13 @@ end = clock.time()
 print("Compilation + Execution Time:", end - start)
 
 plt.subplot(3, 1, 1)
-plt.plot(state[:, 0].T)
-plt.ylabel("x1")
+plt.plot(state[:, 0])
+plt.ylabel("q")
 plt.subplot(3, 1, 2)
-plt.plot(state[:, 1].T)
-plt.ylabel("x2")
+plt.plot(state[:, 1])
+plt.ylabel("dq")
 plt.subplot(3, 1, 3)
-plt.plot(action[:, 1].T)
+plt.plot(action[:, 1])
 plt.ylabel("u")
 plt.xlabel("t")
 plt.show()
@@ -233,13 +232,13 @@ end = clock.time()
 print("Execution Time:", end - start)
 
 plt.subplot(3, 1, 1)
-plt.plot(state[:, 0].T)
-plt.ylabel("x1")
+plt.plot(state[:, 0])
+plt.ylabel("q")
 plt.subplot(3, 1, 2)
-plt.plot(state[:, 1].T)
-plt.ylabel("x2")
+plt.plot(state[:, 1])
+plt.ylabel("dq")
 plt.subplot(3, 1, 3)
-plt.plot(action[:, 1].T)
+plt.plot(action[:, 1])
 plt.ylabel("u")
 plt.xlabel("t")
 plt.show()
