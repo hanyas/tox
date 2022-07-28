@@ -8,8 +8,7 @@ import jax.scipy as jsc
 from jax import jit
 from jax.lax import scan, cond, while_loop
 
-from tox.objects import Trajectory
-from tox.spaces import Box
+from tox.objects import Trajectory, Box
 
 from tox.objects import (
     QuadraticFinalCost,

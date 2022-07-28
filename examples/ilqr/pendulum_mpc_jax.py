@@ -12,8 +12,7 @@ from jax import jit
 from jax import block_until_ready
 from jax.lax import fori_loop, scan
 
-from tox.spaces import Box
-from tox.objects import Trajectory
+from tox.objects import Trajectory, Box
 from tox.utils import runge_kutta
 from tox.solvers import ilqr
 from tox.solvers.ilqr import Hyperparameters, LinearPolicy

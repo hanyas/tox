@@ -4,10 +4,9 @@ config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.lax import fori_loop
 
-from tox.objects import Trajectory
+from tox.objects import Trajectory, Box
 from tox.utils import runge_kutta
 from tox.solvers import ilqr
-from tox.spaces import Box
 
 import time as clock
 import matplotlib.pyplot as plt

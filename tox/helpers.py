@@ -12,10 +12,8 @@ from tox.objects import (
     Trajectory,
     QuadraticFinalCost,
     QuadraticTransientCost,
-    LinearDynamics,
+    LinearDynamics, Box,
 )
-
-from tox.spaces import Box
 
 
 def quadratize_final_cost(
