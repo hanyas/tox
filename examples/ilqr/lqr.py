@@ -3,12 +3,10 @@ config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
 from jax.lax import fori_loop
-from jax import block_until_ready
 
 from tox.objects import Trajectory
 from tox.utils import runge_kutta
 from tox.solvers import ilqr
-
 from tox.spaces import Box
 
 import time as clock
@@ -53,7 +51,6 @@ def double_integrator(
     return A @ state + B @ action + c
 
 
-# limits
 state_space: Box = Box(
     low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
     high=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).max,
@@ -104,7 +101,7 @@ init_state = jnp.array([0., 0.])
 options = ilqr.Hyperparameters()
 
 start = clock.time()
-policy, reference, trace = ilqr.solver(
+policy, reference, trace = ilqr.py_solver(
     final_cost,
     transient_cost,
     dynamics,
@@ -116,6 +113,9 @@ policy, reference, trace = ilqr.solver(
     init_state,
 )
 
+end = clock.time()
+print("Compilation + Execution Time:", end - start)
+
 episode = ilqr.rollout(
     final_cost,
     transient_cost,
@@ -126,9 +126,6 @@ episode = ilqr.rollout(
     reference,
     init_state,
 )
-block_until_ready(episode)
-end = clock.time()
-print("Compilation + Execution Time:", end - start)
 
 state, action, total_cost = episode
 
