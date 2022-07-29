@@ -129,13 +129,13 @@ episode = ilqr.rollout(
 state, action, total_cost = episode
 
 plt.subplot(3, 1, 1)
-plt.plot(state[:, 0].T)
+plt.plot(state[:, 0])
 plt.ylabel("x1")
 plt.subplot(3, 1, 2)
-plt.plot(state[:, 1].T)
+plt.plot(state[:, 1])
 plt.ylabel("x2")
 plt.subplot(3, 1, 3)
-plt.plot(action[:, 1].T)
+plt.plot(action[:, 0])
 plt.ylabel("u")
 plt.xlabel("t")
 plt.show()

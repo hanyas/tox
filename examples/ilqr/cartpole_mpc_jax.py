@@ -21,8 +21,8 @@ import time as clock
 import matplotlib.pyplot as plt
 
 
-simulation_step = 0.01
-downsampling = 4
+simulation_step = 0.04
+downsampling = 1
 
 state_dim = 4
 action_dim = 1
@@ -60,12 +60,13 @@ def cartpole(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
 
+    # https://underactuated.mit.edu/acrobot.html#cart_pole
+
     gravity: float = 9.81
     pole_length: float = 0.5
     cart_mass: float = 10.0
     pole_mass: float = 1.0
     total_mass: float = cart_mass + pole_mass
-    damping: float = 0.005
 
     cart_position, pole_position, cart_velocity, pole_velocity = state
 
@@ -95,8 +96,8 @@ state_space: Box = Box(
 )
 
 action_space: Box = Box(
-    low=-45.0 * jnp.ones((action_dim,)),
-    high=45.0 * jnp.ones((action_dim,)),
+    low=-50.0 * jnp.ones((action_dim,)),
+    high=50.0 * jnp.ones((action_dim,)),
     shape=(action_dim,),
 )
 
@@ -181,7 +182,7 @@ policy = ilqr.LinearPolicy(
     kff=1e-1 * jr.normal(policy_key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([0.01, -0.01, 0.01, -0.01])
+init_state = jnp.array([0.01, wrap_angle(-0.01), 0.01, -0.01])
 options = ilqr.Hyperparameters(max_iter=100)
 
 start = clock.time()
@@ -231,7 +232,7 @@ policy = ilqr.LinearPolicy(
     kff=1e-1 * jr.normal(policy_key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([-0.01, 0.01, -0.01, 0.01])
+init_state = jnp.array([-0.01, wrap_angle(0.01), -0.01, 0.01])
 
 start = clock.time()
 state, action = mpc_rollout(
@@ -263,7 +264,7 @@ plt.subplot(5, 1, 4)
 plt.plot(state[:, 3])
 plt.ylabel("dq")
 plt.subplot(5, 1, 5)
-plt.plot(action[:, 1])
+plt.plot(action[:, 0])
 plt.ylabel("u")
 plt.xlabel("t")
 plt.show()

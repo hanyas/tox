@@ -64,8 +64,8 @@ def pendulum(
     return jnp.hstack(
         (
             velocity,
-            -3.0 * gravity / (2.0 * length) * jnp.sin(position)
-            + 3.0 * (action - damping * velocity) / (mass * length**2),
+            - gravity / length * jnp.sin(position)
+            + (action - damping * velocity) / (mass * length**2),
         )
     )
 
@@ -77,8 +77,8 @@ state_space: Box = Box(
 )
 
 action_space: Box = Box(
-    low=-2.5 * jnp.ones((action_dim,)),
-    high=2.5 * jnp.ones((action_dim,)),
+    low=-5.0 * jnp.ones((action_dim,)),
+    high=5.0 * jnp.ones((action_dim,)),
     shape=(action_dim,),
 )
 
@@ -118,7 +118,7 @@ init_policy = ilqr.LinearPolicy(
     kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([0.01, 0.0])
+init_state = jnp.array([wrap_angle(0.01), 0.0])
 
 options = ilqr.Hyperparameters()
 
@@ -157,7 +157,7 @@ plt.subplot(3, 1, 2)
 plt.plot(state[:, 1])
 plt.ylabel("dq")
 plt.subplot(3, 1, 3)
-plt.plot(action[:, 1])
+plt.plot(action[:, 0])
 plt.ylabel("u")
 plt.xlabel("t")
 plt.show()
