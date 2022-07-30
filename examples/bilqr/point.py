@@ -14,7 +14,7 @@ import time as clock
 import matplotlib.pyplot as plt
 
 
-horizon = 250
+horizon = 100
 simulation_step = 0.1
 downsampling = 1
 
@@ -44,7 +44,7 @@ def transient_cost(
     goal: jnp.ndarray = jnp.array([0.0])
     mean_cost: jnp.ndarray = jnp.diag(jnp.array([0.0]))
     covariance_cost: jnp.ndarray = jnp.diag(jnp.array([10.0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([0.1]))
+    action_cost: jnp.ndarray = jnp.diag(jnp.array([0.5]))
 
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
@@ -105,12 +105,15 @@ def belief_dynamics(belief: jnp.ndarray,
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
 
+    # linearize process and observation
     A = jac(dynamics, 0)(mu, action, time)
     H = jac(observation, 0)(mu, action, time)
 
+    # evaluate state-action-dependent noise
     M = process_noise(mu, action, time)
     N = observation_noise(dynamics(mu, action, time), action, time)
 
+    # extended Kalman filter updates
     G = symmetrize(A @ cov @ A.T) + M
     K = jnp.linalg.solve(H @ G @ H.T + N, H @ G.T).T
 
@@ -134,7 +137,7 @@ init_policy = ilqr.LinearPolicy(
 )
 
 init_mu = jnp.array([-5.0])
-init_cov = jnp.eye(state_dim) * 1.0
+init_cov = jnp.eye(state_dim) * 5.0
 init_belief = jnp.hstack((init_mu, jnp.ravel(init_cov)))
 
 options = ilqr.Hyperparameters()
