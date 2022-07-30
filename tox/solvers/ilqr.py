@@ -88,20 +88,23 @@ def _differential_backward_pass(
         qx = cx + A.T @ vx
         qu = cu + B.T @ vx
 
-        Quu_reg = symmetrize(Quu + lmbda * jnp.eye(Quu.shape[0]))
+        # Quu_reg = symmetrize(Quu + lmbda * jnp.eye(Quu.shape[0]))
+
+        Quu_reg = symmetrize(Cuu + B.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B)
+        Qux_reg = (Cxu + A.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B).T
 
         feasability = jnp.all(jnp.linalg.eigvals(Quu_reg) > 0.0)
 
         def _not_feasible(args):
-            Vxx, vx, dV, Quu, Quu_reg, Qux, qx, qu = args
+            Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
 
             K, kff = jnp.zeros_like(Qux), jnp.zeros_like(qu)
             return (Vxx, vx, dV), (K, kff, False)
 
         def _feasible(args):
-            Vxx, vx, dV, Quu, Quu_reg, Qux, qx, qu = args
+            Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
 
-            K = -jsc.linalg.solve(Quu_reg, Qux, sym_pos=True)
+            K = -jsc.linalg.solve(Quu_reg, Qux_reg, sym_pos=True)
             kff = -jsc.linalg.solve(Quu_reg, qu, sym_pos=True)
 
             Vxx = symmetrize(Qxx + K.T @ Quu @ K + K.T @ Qux + Qux.T @ K)
@@ -114,7 +117,7 @@ def _differential_backward_pass(
             feasability,
             _feasible,
             _not_feasible,
-            (Vxx, vx, dV, Quu, Quu_reg, Qux, qx, qu),
+            (Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu),
         )
 
     (_, _, dV), (K, kff, feasible) = scan(
