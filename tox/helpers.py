@@ -55,5 +55,5 @@ def linearize_dynamics(
     # f(x, u) = f(xr, ur) + A(xr, ur) (x - xr) + B(xr, ur) (u - ur)
     A = jac(state_space(dynamics), 0)(reference.state, reference.action, time)
     B = jac(state_space(dynamics), 1)(reference.state, reference.action, time)
-    c = state_space(dynamics)(reference.state, reference.action, time)
-    return LinearDynamics(A, B, c)
+    f0 = state_space(dynamics)(reference.state, reference.action, time)
+    return LinearDynamics(A, B, f0)

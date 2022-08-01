@@ -7,22 +7,20 @@ class Box(NamedTuple):
     high: jnp.ndarray
     shape: Tuple
 
-    def __call__(self, func) -> Callable:
-        return lambda *args: jnp.clip(func(*args), self.low, self.high)
-
-    def contains(self, x: jnp.ndarray) -> bool:
-        range_cond = jnp.logical_and(
-            jnp.all(x >= self.low), jnp.all(x <= self.high)
-        )
-        return range_cond
-
     def clip(self, x: jnp.ndarray) -> jnp.ndarray:
         return jnp.clip(x, self.low, self.high)
+
+    def __call__(self, func) -> Callable:
+        return lambda *args: self.clip(func(*args))
 
 
 class Trajectory(NamedTuple):
     state: jnp.ndarray
     action: jnp.ndarray
+
+    @property
+    def horizon(self):
+        return len(self.action)
 
     @property
     def final(self):
@@ -31,10 +29,6 @@ class Trajectory(NamedTuple):
     @property
     def transient(self):
         return Trajectory(self.state[:-1], self.action)
-
-    @property
-    def horizon(self):
-        return len(self.action)
 
 
 class QuadraticFinalCost(NamedTuple):
@@ -55,4 +49,4 @@ class QuadraticTransientCost(NamedTuple):
 class LinearDynamics(NamedTuple):
     A: jnp.ndarray
     B: jnp.ndarray
-    c: jnp.ndarray
+    f0: jnp.ndarray

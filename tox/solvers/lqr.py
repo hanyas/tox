@@ -1,5 +1,4 @@
 from typing import NamedTuple, Callable
-
 from functools import partial
 
 import jax.numpy as jnp
@@ -8,12 +7,11 @@ import jax.scipy as jsc
 from jax import jit
 from jax.lax import scan
 
-from tox.objects import Trajectory
-
 from tox.objects import (
     QuadraticFinalCost,
     QuadraticTransientCost,
     LinearDynamics,
+    Trajectory
 )
 
 from tox.helpers import (
