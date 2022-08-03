@@ -19,8 +19,8 @@ from tox.objects import (
 def quadratize_final_cost(
     final_cost: Callable, state: jnp.ndarray
 ) -> QuadraticFinalCost:
-    # f(x, u) = 0.5 * (x - xr).T * Cxx(xr, ur) * (x - xr)
-    #           + (x - xr).T * cx + f(xr, ur)
+    # f(x, u) = 0.5 * (x - xr).T * Cxx(xr) * (x - xr)
+    #           + (x - xr).T * cx + f(xr)
     Cxx = hess(final_cost, 0)(state)
     cx = jac(final_cost, 0)(state)
     c0 = final_cost(state)
@@ -52,7 +52,7 @@ def quadratize_transient_cost(
 def linearize_dynamics(
     dynamics: Callable, state_space: Box, reference: Trajectory, time: jnp.ndarray,
 ) -> LinearDynamics:
-    # f(x, u) = f(xr, ur) + A(xr, ur) (x - xr) + B(xr, ur) (u - ur)
+    # f(x, u) = f(xr, ur) + A(xr, ur) * (x - xr) + B(xr, ur) * (u - ur)
     A = jac(state_space(dynamics), 0)(reference.state, reference.action, time)
     B = jac(state_space(dynamics), 1)(reference.state, reference.action, time)
     f0 = state_space(dynamics)(reference.state, reference.action, time)
