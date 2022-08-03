@@ -5,7 +5,7 @@ import jax.numpy as jnp
 from jax.lax import fori_loop
 from jax import block_until_ready
 
-from tox.objects import Trajectory
+from tox.objects import Trajectory, Box
 from tox.utils import runge_kutta
 from tox.solvers import lqr
 
@@ -37,8 +37,8 @@ def transient_cost(
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    c = (state - goal).T @ state_cost @ (state - goal)\
-        + action.T @ action_cost @ action
+    c = (state - goal).T @ state_cost @ (state - goal)
+    c += action.T @ action_cost @ action
     return c * (simulation_step * downsampling)
 
 
@@ -50,10 +50,22 @@ def double_integrator(
     return A @ state + B @ action
 
 
+state_space: Box = Box(
+    low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
+    high=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).max,
+    shape=(state_dim,),
+)
+
+action_space: Box = Box(
+    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
+    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
+    shape=(action_dim,),
+)
+
+
 def dynamics(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-
     def _step(t, state):
         next_state = runge_kutta(
             state,
@@ -79,12 +91,19 @@ reference = Trajectory(
 
 start = clock.time()
 policy = lqr.solver(
-    final_cost, transient_cost, dynamics, reference
+    final_cost, transient_cost, dynamics, state_space, reference
 )
 
 init_state = jnp.array([0.0, 0.0])
 episode = lqr.rollout(
-    final_cost, transient_cost, dynamics, init_state, policy, reference
+    final_cost,
+    transient_cost,
+    dynamics,
+    state_space,
+    policy,
+    action_space,
+    reference,
+    init_state,
 )
 block_until_ready(episode)
 end = clock.time()

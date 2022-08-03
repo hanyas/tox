@@ -36,8 +36,8 @@ def transient_cost(
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    c = (state - goal).T @ state_cost @ (state - goal)\
-        + action.T @ action_cost @ action
+    c = (state - goal).T @ state_cost @ (state - goal)
+    c += action.T @ action_cost @ action
     return c * (simulation_step * downsampling)
 
 
@@ -65,7 +65,6 @@ action_space: Box = Box(
 def dynamics(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-
     def _step(t, state):
         next_state = runge_kutta(
             state,
