@@ -2,10 +2,12 @@ from typing import NamedTuple, Callable, Tuple
 import jax.numpy as jnp
 
 
-class Box(NamedTuple):
-    low: jnp.ndarray
-    high: jnp.ndarray
-    shape: Tuple
+class Box:
+
+    def __init__(self, low: jnp.ndarray, high: jnp.ndarray, shape: Tuple):
+        self.low = low
+        self.high = high
+        self.shape = shape
 
     def clip(self, x: jnp.ndarray) -> jnp.ndarray:
         return jnp.clip(x, self.low, self.high)
