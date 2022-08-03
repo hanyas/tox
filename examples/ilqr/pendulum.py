@@ -5,48 +5,31 @@ config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import jax.random as jr
 
-from jax.lax import fori_loop
-
 from tox.objects import Trajectory, Box
-from tox.utils import runge_kutta
+from tox.utils import discretize_dynamics, wrap_angle
 from tox.solvers import ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
 
 
-simulation_step = 0.01
-downsampling = 5
-
-horizon = 100
-state_dim = 2
-action_dim = 1
-
-
-def wrap_angle(x):
-    # wrap angle between [0, 2*pi]
-    return x % (2.0 * jnp.pi)
-
-
-def final_cost(state: jnp.ndarray) -> float:
-    goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
+def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
-    c = (_wrapped - goal).T @ final_state_cost @ (_wrapped - goal)
+    c = (_wrapped - goal_state).T @ final_state_cost @ (_wrapped - goal_state)
     return c
 
 
 def transient_cost(
-    state: jnp.ndarray, action: jnp.ndarray, time: int
+    state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    goal: jnp.ndarray = jnp.array([jnp.pi, 0.0])
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
-    c = (_wrapped - goal).T @ state_cost @ (_wrapped - goal)
+    c = (_wrapped - goal_state).T @ state_cost @ (_wrapped - goal_state)
     c += action.T @ action_cost @ action
     return c
 
@@ -64,11 +47,20 @@ def pendulum(
     return jnp.hstack(
         (
             velocity,
-            - gravity / length * jnp.sin(position)
+            -gravity / length * jnp.sin(position)
             + (action - damping * velocity) / (mass * length**2),
         )
     )
 
+
+simulation_step = 0.01
+downsampling = 5
+dynamics = discretize_dynamics(
+    ode=pendulum, simulation_step=simulation_step, downsampling=downsampling
+)
+
+state_dim = 2
+action_dim = 1
 
 state_space: Box = Box(
     low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
@@ -82,43 +74,21 @@ action_space: Box = Box(
     shape=(action_dim,),
 )
 
+init_state = jnp.array([wrap_angle(0.01), 0.0])
+goal_state = jnp.array([jnp.pi, 0.0])
 
-def dynamics(
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    time: int,
-) -> jnp.ndarray:
-    def _step(t, state):
-        next_state = runge_kutta(
-            state,
-            action,
-            time + t * simulation_step,
-            pendulum,
-            simulation_step,
-        )
-        return next_state
-
-    return fori_loop(
-        lower=0,
-        upper=downsampling,
-        body_fun=_step,
-        init_val=state,
-    )
-
+horizon = 100
 
 key = jr.PRNGKey(1337)
-
-init_reference = Trajectory(
-    state=jnp.zeros((horizon + 1, state_dim)),
-    action=jnp.zeros((horizon, action_dim)),
-)
-
 init_policy = ilqr.LinearPolicy(
     K=jnp.zeros((horizon, action_dim, state_dim)),
     kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
 )
 
-init_state = jnp.array([wrap_angle(0.01), 0.0])
+init_reference = Trajectory(
+    state=jnp.zeros((horizon + 1, state_dim)),
+    action=jnp.zeros((horizon, action_dim)),
+)
 
 options = ilqr.Hyperparameters()
 
@@ -126,12 +96,13 @@ start = clock.time()
 policy, reference, _ = ilqr.py_solver(
     final_cost,
     transient_cost,
+    goal_state,
     dynamics,
+    init_state,
     state_space,
     init_policy,
     action_space,
     init_reference,
-    init_state,
     options,
 )
 end = clock.time()
@@ -140,12 +111,13 @@ print("Compilation + Execution Time:", end - start)
 episode = ilqr.rollout(
     final_cost,
     transient_cost,
+    goal_state,
     dynamics,
+    init_state,
     state_space,
     policy,
     action_space,
     reference,
-    init_state,
 )
 
 state, action, total_cost = episode
