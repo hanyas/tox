@@ -11,7 +11,7 @@ from tox.objects import (
     QuadraticFinalCost,
     QuadraticTransientCost,
     LinearDynamics,
-    Trajectory
+    Trajectory, Box
 )
 
 from tox.helpers import (
@@ -92,6 +92,7 @@ def solver(
     final_cost: Callable,
     transient_cost: Callable,
     dynamics: Callable,
+    state_space: Box,
     reference: Trajectory,
 ) -> LinearPolicy:
 
@@ -105,7 +106,7 @@ def solver(
         transient_cost, reference.transient, time[:-1]
     )
     linear_dynamics = linearize_dynamics(
-        dynamics, reference.transient, time[:-1]
+        dynamics, state_space, reference.transient, time[:-1]
     )
 
     return _backward_pass(
@@ -118,15 +119,17 @@ def rollout(
     final_cost: Callable,
     transient_cost: Callable,
     dynamics: Callable,
-    init_state: jnp.ndarray,
+    state_space: Box,
     policy: LinearPolicy,
+    action_space: Box,
     reference: Trajectory,
+    init_state: jnp.ndarray,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
 
     def episode(state, time):
-        action = policy(state, time, reference)
+        action = action_space.clip(policy(state, time, reference))
         cost = transient_cost(state, action, time)
-        next_state = dynamics(state, action, time)
+        next_state = state_space.clip(dynamics(state, action, time))
         return next_state, [next_state, action, cost]
 
     horizon = reference.horizon
