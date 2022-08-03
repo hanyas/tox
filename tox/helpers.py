@@ -9,42 +9,43 @@ from jax import vmap
 import jax.numpy as jnp
 
 from tox.objects import (
-    Trajectory,
     QuadraticFinalCost,
     QuadraticTransientCost,
-    LinearDynamics, Box,
+    LinearDynamics,
+    Trajectory, Box
 )
 
 
 def quadratize_final_cost(
-    final_cost: Callable, state: jnp.ndarray
+    final_cost: Callable, goal_state: jnp.ndarray, state: jnp.ndarray,
 ) -> QuadraticFinalCost:
     # f(x, u) = 0.5 * (x - xr).T * Cxx(xr) * (x - xr)
     #           + (x - xr).T * cx + f(xr)
-    Cxx = hess(final_cost, 0)(state)
-    cx = jac(final_cost, 0)(state)
-    c0 = final_cost(state)
+    Cxx = hess(final_cost, 0)(state, goal_state)
+    cx = jac(final_cost, 0)(state, goal_state)
+    c0 = final_cost(state, goal_state)
     return QuadraticFinalCost(Cxx, cx, c0)
 
 
-@partial(vmap, in_axes=(None, 0, 0))
+@partial(vmap, in_axes=(None, None, 0, 0))
 def quadratize_transient_cost(
-    transient_cost: Callable, reference: Trajectory, time: jnp.ndarray
+    transient_cost: Callable,
+    goal_state: jnp.ndarray,
+    reference: Trajectory,
+    time: jnp.ndarray,
 ) -> QuadraticTransientCost:
     # f(x, u) = 0.5 * (x - xr).T * Cxx(xr, ur) * (x - xr)
     #           + 0.5 * (u - ur).T * Cuu(xr, ur) * (u - ur)
     #           + 0.5 * (x - xr).T * Cxu(xr, ur) * (u - ur)
     #           + 0.5 * (u - ur).T * Cux(xr, ur) * (x - xr)
     #           + (x - xr).T * cx + (u - ur).T * cu + f(xr, ur)
-    Cxx = hess(transient_cost, 0)(reference.state, reference.action, time)
-    Cuu = hess(transient_cost, 1)(reference.state, reference.action, time)
-    Cxu = jac(jac(transient_cost, 0), 1)(
-        reference.state, reference.action, time
-    )
+    Cxx = hess(transient_cost, 0)(reference.state, reference.action, time, goal_state)
+    Cuu = hess(transient_cost, 1)(reference.state, reference.action, time, goal_state)
+    Cxu = jac(jac(transient_cost, 0), 1)(reference.state, reference.action, time, goal_state)
 
-    cx = jac(transient_cost, 0)(reference.state, reference.action, time)
-    cu = jac(transient_cost, 1)(reference.state, reference.action, time)
-    c0 = transient_cost(reference.state, reference.action, time)
+    cx = jac(transient_cost, 0)(reference.state, reference.action, time, goal_state)
+    cu = jac(transient_cost, 1)(reference.state, reference.action, time, goal_state)
+    c0 = transient_cost(reference.state, reference.action, time, goal_state)
     return QuadraticTransientCost(Cxx, Cuu, Cxu, cx, cu, c0)
 
 
