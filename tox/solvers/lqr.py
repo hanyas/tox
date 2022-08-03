@@ -28,13 +28,9 @@ class LinearPolicy(NamedTuple):
     kff: jnp.ndarray
 
     def __call__(
-        self, state: jnp.ndarray, time: int, reference: Trajectory
+        self, state: jnp.ndarray, time: int,
     ) -> jnp.ndarray:
-        return (
-            reference.action[time]
-            + self.K[time] @ (state - reference.state[time])
-            + self.kff[time]
-        )
+        return self.K[time] @ state + self.kff[time]
 
 
 def _backward_pass(
@@ -87,23 +83,30 @@ def _backward_pass(
     return LinearPolicy(K, kff)
 
 
-@partial(jit, static_argnums=(0, 1, 2))
+@partial(jit, static_argnums=(0, 1, 3, 4, 5, -1))
 def solver(
     final_cost: Callable,
     transient_cost: Callable,
+    goal_state: jnp.ndarray,
     dynamics: Callable,
     state_space: Box,
-    reference: Trajectory,
+    action_space: Box,
+    horizon: int
 ) -> LinearPolicy:
 
-    horizon = reference.horizon
     time = jnp.linspace(0, horizon, horizon + 1)
 
+    # reference needed only for automatic Taylor expansions
+    reference = Trajectory(
+        state=jnp.tile(jnp.zeros(state_space.shape), (horizon + 1, 1)),
+        action=jnp.tile(jnp.zeros(action_space.shape), (horizon, 1)),
+    )
+
     quadratic_final_cost = quadratize_final_cost(
-        final_cost, reference.final,
+        final_cost, goal_state, reference.final,
     )
     quadratic_transient_cost = quadratize_transient_cost(
-        transient_cost, reference.transient, time[:-1]
+        transient_cost, goal_state, reference.transient, time[:-1]
     )
     linear_dynamics = linearize_dynamics(
         dynamics, state_space, reference.transient, time[:-1]
@@ -114,25 +117,25 @@ def solver(
     )
 
 
-@partial(jit, static_argnums=(0, 1, 2))
+@partial(jit, static_argnums=(0, 1, 3, 5, 7, 8))
 def rollout(
     final_cost: Callable,
     transient_cost: Callable,
+    goal_state: jnp.ndarray,
     dynamics: Callable,
+    init_state: jnp.ndarray,
     state_space: Box,
     policy: LinearPolicy,
     action_space: Box,
-    reference: Trajectory,
-    init_state: jnp.ndarray,
+    horizon: int
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
 
     def episode(state, time):
-        action = action_space.clip(policy(state, time, reference))
-        cost = transient_cost(state, action, time)
+        action = action_space.clip(policy(state, time))
+        cost = transient_cost(state, action, time, goal_state)
         next_state = state_space.clip(dynamics(state, action, time))
         return next_state, [next_state, action, cost]
 
-    horizon = reference.horizon
     next_state, action, cost = scan(
         f=episode,
         init=init_state,
@@ -140,5 +143,5 @@ def rollout(
     )[1]
 
     state = jnp.vstack((init_state, next_state))
-    total_cost = jnp.sum(cost) + final_cost(state[-1])
+    total_cost = jnp.sum(cost) + final_cost(state[-1], goal_state)
     return state, action, total_cost

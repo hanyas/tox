@@ -11,8 +11,9 @@ from jax.lax import scan, cond, while_loop
 from tox.objects import (
     QuadraticFinalCost,
     QuadraticTransientCost,
-    LinearDynamics, Box,
-    Trajectory
+    LinearDynamics,
+    Box,
+    Trajectory,
 )
 
 from tox.helpers import (
@@ -89,7 +90,9 @@ def _differential_backward_pass(
 
         # Quu_reg = symmetrize(Quu + lmbda * jnp.eye(Quu.shape[0]))
 
-        Quu_reg = symmetrize(Cuu + B.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B)
+        Quu_reg = symmetrize(
+            Cuu + B.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B
+        )
         Qux_reg = (Cxu + A.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B).T
 
         feasability = jnp.all(jnp.linalg.eigvals(Quu_reg) > 0.0)
@@ -133,7 +136,7 @@ _jit_backward_pass = jit(_differential_backward_pass)
 
 
 def _linearize_quadratize(
-    final_cost, transient_cost, dynamics, state_space, reference
+    final_cost, transient_cost, goal_state, dynamics, state_space, reference
 ):
 
     horizon = reference.horizon
@@ -141,10 +144,11 @@ def _linearize_quadratize(
 
     quadratic_final_cost = quadratize_final_cost(
         final_cost,
+        goal_state,
         reference.final,
     )
     quadratic_transient_cost = quadratize_transient_cost(
-        transient_cost, reference.transient, time[:-1]
+        transient_cost, goal_state, reference.transient, time[:-1]
     )
     linear_dynamics = linearize_dynamics(
         dynamics, state_space, reference.transient, time[:-1]
@@ -153,18 +157,21 @@ def _linearize_quadratize(
     return quadratic_final_cost, quadratic_transient_cost, linear_dynamics
 
 
-_jit_linearize_quadratize = jit(_linearize_quadratize, static_argnums=(0, 1, 2))
+_jit_linearize_quadratize = jit(
+    _linearize_quadratize, static_argnums=(0, 1, 3, 4)
+)
 
 
 def py_solver(
     final_cost: Callable,
     transient_cost: Callable,
+    goal_state: jnp.ndarray,
     dynamics: Callable,
+    init_state: jnp.ndarray,
     state_space: Box,
     policy: LinearPolicy,
     action_space: Box,
     reference: Trajectory,
-    init_state: jnp.ndarray,
     options: Hyperparameters,
     verbose: bool = False,
 ) -> (LinearPolicy, Trajectory):
@@ -178,12 +185,13 @@ def py_solver(
         _state, _action, _total_cost = _jit_rollout(
             final_cost,
             transient_cost,
+            goal_state,
             dynamics,
+            init_state,
             state_space,
             policy,
             action_space,
             reference,
-            init_state,
             options.alphas[k],
         )
         if jnp.all(jnp.abs(_state) < 1e8):
@@ -208,7 +216,12 @@ def py_solver(
                 quadratic_transient_cost,
                 linear_dynamics,
             ) = _jit_linearize_quadratize(
-                final_cost, transient_cost, dynamics, state_space, reference
+                final_cost,
+                transient_cost,
+                goal_state,
+                dynamics,
+                state_space,
+                reference,
             )
 
             backpass_feasible = False
@@ -264,12 +277,13 @@ def py_solver(
                 _next_state, _next_action, _next_total_cost = _jit_rollout(
                     final_cost,
                     transient_cost,
+                    goal_state,
                     dynamics,
+                    init_state,
                     state_space,
                     next_policy,
                     action_space,
                     reference,
-                    init_state,
                     options.alphas[m],
                 )
 
@@ -329,16 +343,17 @@ def py_solver(
         return policy, reference, trace
 
 
-@partial(jit, static_argnums=(0, 1, 2))
+@partial(jit, static_argnums=(0, 1, 3, 5, 7))
 def jax_solver(
     final_cost: Callable,
     transient_cost: Callable,
+    goal_state: jnp.ndarray,
     dynamics: Callable,
+    init_state: jnp.ndarray,
     state_space: Box,
     policy: LinearPolicy,
     action_space: Box,
     reference: Trajectory,
-    init_state: jnp.ndarray,
     options: Hyperparameters,
 ) -> (LinearPolicy, Trajectory):
 
@@ -355,12 +370,13 @@ def jax_solver(
         state, action, total_cost = rollout(
             final_cost,
             transient_cost,
+            goal_state,
             dynamics,
+            init_state,
             state_space,
             policy,
             action_space,
             reference,
-            init_state,
             options.alphas[k],
         )
 
@@ -389,7 +405,12 @@ def jax_solver(
                 quadratic_transient_cost,
                 linear_dynamics,
             ) = _linearize_quadratize(
-                final_cost, transient_cost, dynamics, state_space, reference
+                final_cost,
+                transient_cost,
+                goal_state,
+                dynamics,
+                state_space,
+                reference,
             )
 
             # backward pass feasability
@@ -494,12 +515,13 @@ def jax_solver(
                         next_state, next_action, next_total_cost = rollout(
                             final_cost,
                             transient_cost,
+                            goal_state,
                             dynamics,
+                            init_state,
                             state_space,
                             next_policy,
                             action_space,
                             reference,
-                            init_state,
                             options.alphas[m],
                         )
 
@@ -621,7 +643,7 @@ def jax_solver(
                             total_cost,
                             next_total_cost,
                             lmbda,
-                            d_lmbda
+                            d_lmbda,
                         ),
                     )
                     return policy, reference, total_cost, lmbda, d_lmbda
@@ -653,7 +675,15 @@ def jax_solver(
                 return policy, reference, total_cost, lmbda, d_lmbda
 
             def _backpass_failure(args):
-                policy, reference, total_cost, next_policy, dV, lmbda, d_lmbda = args
+                (
+                    policy,
+                    reference,
+                    total_cost,
+                    next_policy,
+                    dV,
+                    lmbda,
+                    d_lmbda,
+                ) = args
                 return policy, reference, total_cost, lmbda, d_lmbda
 
             policy, reference, total_cost, lmbda, d_lmbda = cond(
@@ -696,12 +726,13 @@ def jax_solver(
     state, action, total_cost = rollout(
         final_cost,
         transient_cost,
+        goal_state,
         dynamics,
+        init_state,
         state_space,
         policy,
         action_space,
         reference,
-        init_state,
         options.alphas[0],
     )
 
@@ -729,17 +760,18 @@ def jax_solver(
 def rollout(
     final_cost: Callable,
     transient_cost: Callable,
+    goal_state: jnp.ndarray,
     dynamics: Callable,
+    init_state: jnp.ndarray,
     state_space: Box,
     policy: LinearPolicy,
     action_space: Box,
     reference: Trajectory,
-    init_state: jnp.ndarray,
     alpha: float = 1.0,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
     def episode(state, time):
         action = action_space.clip(policy(state, time, reference, alpha))
-        cost = transient_cost(state, action, time)
+        cost = transient_cost(state, action, time, goal_state)
         next_state = state_space.clip(dynamics(state, action, time))
         return next_state, [next_state, action, cost]
 
@@ -751,8 +783,51 @@ def rollout(
     )[1]
 
     state = jnp.vstack((init_state, next_state))
-    total_cost = jnp.sum(cost) + final_cost(state[-1])
+    total_cost = jnp.sum(cost) + final_cost(state[-1], goal_state)
     return state, action, total_cost
 
 
-_jit_rollout = jit(rollout, static_argnums=(0, 1, 2))
+_jit_rollout = jit(rollout, static_argnums=(0, 1, 3, 5, 7))
+
+
+@partial(jit, static_argnums=(0, 1, 3, 5, 7, -1))
+def mpc_rollout(
+    final_cost: Callable,
+    transient_cost: Callable,
+    goal_state: jnp.ndarray,
+    dynamics: Callable,
+    init_state: jnp.ndarray,
+    state_space: Box,
+    policy: LinearPolicy,
+    action_space: Box,
+    reference: Trajectory,
+    options: Hyperparameters,
+    nb_steps: int,
+) -> (jnp.ndarray, jnp.ndarray):
+    def mpc_step(carry, args):
+        policy, reference, state = carry
+
+        next_policy, next_reference = jax_solver(
+            final_cost,
+            transient_cost,
+            goal_state,
+            dynamics,
+            state,
+            state_space,
+            policy,
+            action_space,
+            reference,
+            options,
+        )
+
+        action = next_reference.action[0]
+        next_state = state_space.clip(dynamics(state, action, 0))
+
+        return (next_policy, next_reference, next_state), (next_state, action)
+
+    _, (state, action) = scan(
+        mpc_step, init=(policy, reference, init_state), xs=jnp.arange(nb_steps)
+    )
+
+    state = jnp.vstack((init_state, state))
+    return state, action
