@@ -7,7 +7,7 @@ import jax.random as jr
 
 from tox.objects import Trajectory, Box
 from tox.utils import discretize_dynamics, wrap_angle
-from tox.solvers import ilqr
+from tox.solvers import iter_lqr as ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
-    c = (_wrapped - goal_state).T @ final_state_cost @ (_wrapped - goal_state)
+    c = 0.5 * (_wrapped - goal_state).T @ final_state_cost @ (_wrapped - goal_state)
     return c
 
 
@@ -29,8 +29,8 @@ def transient_cost(
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
-    c = (_wrapped - goal_state).T @ state_cost @ (_wrapped - goal_state)
-    c += action.T @ action_cost @ action
+    c = 0.5 * (_wrapped - goal_state).T @ state_cost @ (_wrapped - goal_state)
+    c += 0.5 * action.T @ action_cost @ action
     return c
 
 

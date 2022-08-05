@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
 
-    c = (state - goal_state).T @ final_state_cost @ (state - goal_state)
+    c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
     return c
 
 
@@ -26,8 +26,8 @@ def transient_cost(
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    c = (state - goal_state).T @ state_cost @ (state - goal_state)
-    c += action.T @ action_cost @ action
+    c = 0.5 * (state - goal_state).T @ state_cost @ (state - goal_state)
+    c += 0.5 * action.T @ action_cost @ action
     return c
 
 

@@ -1,2 +1,2 @@
 from .solvers import lqr
-from .solvers import ilqr
+from .solvers import iter_lqr

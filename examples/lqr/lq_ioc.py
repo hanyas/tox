@@ -13,7 +13,7 @@ from tox.solvers import lqr
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
 
-    c = (state - goal_state).T @ final_state_cost @ (state - goal_state)
+    c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
     return c
 
 
@@ -24,8 +24,8 @@ def transient_cost(
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    c = (state - goal_state).T @ state_cost @ (state - goal_state)
-    c += action.T @ action_cost @ action
+    c = 0.5 * (state - goal_state).T @ state_cost @ (state - goal_state)
+    c += 0.5 * action.T @ action_cost @ action
     return c
 
 
@@ -99,7 +99,7 @@ def observation_mu(goal_state, state, time):
     return jnp.hstack((next_state, action))
 
 
-observation_cov = jnp.eye(state_dim + action_dim) * 1e-6
+observation_cov = jnp.eye(state_dim + action_dim) * 1e-2
 
 bel_mu = jnp.array([0., 0.])
 bel_cov = jnp.eye(2)

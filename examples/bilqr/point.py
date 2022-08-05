@@ -8,7 +8,7 @@ from jax import jacobian as jac
 
 from tox.objects import Trajectory, Box
 from tox.utils import symmetrize
-from tox.solvers import ilqr
+from tox.solvers import iter_lqr as ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
@@ -32,7 +32,7 @@ def final_cost(belief: jnp.ndarray) -> float:
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
 
-    c = (mu - goal).T @ final_mean_cost @ (mu - goal)
+    c = 0.5 * (mu - goal).T @ final_mean_cost @ (mu - goal)
     c += jnp.trace(final_covariance_cost @ cov)
     return c
 
@@ -49,9 +49,9 @@ def transient_cost(
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
 
-    c = (mu - goal).T @ mean_cost @ (mu - goal)
+    c = 0.5 * (mu - goal).T @ mean_cost @ (mu - goal)
     c += jnp.trace(covariance_cost @ cov)
-    c += action.T @ action_cost @ action
+    c += 0.5 * action.T @ action_cost @ action
     return c
 
 
