@@ -71,11 +71,11 @@ def _backward_pass(
         Vxx = symmetrize(Qxx + Qux.T @ K)
         vx = qx + Qux.T @ kff
 
-        return [Vxx, vx], [K, kff]
+        return (Vxx, vx), (K, kff)
 
     K, kff = scan(
         f=_backwards,
-        init=[fCxx, fcx],
+        init=(fCxx, fcx),
         xs=(Cxx, Cuu, Cxu, cx, cu, A, B),
         reverse=True,
     )[1]
@@ -134,7 +134,7 @@ def rollout(
         action = action_space.clip(policy(state, time))
         cost = transient_cost(state, action, time, goal_state)
         next_state = state_space.clip(dynamics(state, action, time))
-        return next_state, [next_state, action, cost]
+        return next_state, (next_state, action, cost)
 
     next_state, action, cost = scan(
         f=episode,

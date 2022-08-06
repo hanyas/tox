@@ -9,11 +9,11 @@ class Box:
         self.high = high
         self.shape = shape
 
-    def clip(self, x: jnp.ndarray) -> jnp.ndarray:
-        return jnp.clip(x, self.low, self.high)
-
     def __call__(self, func) -> Callable:
         return lambda *args: self.clip(func(*args))
+
+    def clip(self, x: jnp.ndarray) -> jnp.ndarray:
+        return jnp.clip(x, self.low, self.high)
 
 
 class Trajectory(NamedTuple):
