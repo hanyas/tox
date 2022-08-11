@@ -14,34 +14,28 @@ import time as clock
 import matplotlib.pyplot as plt
 
 
-horizon = 100
-simulation_step = 0.1
-downsampling = 1
-
 state_dim = 1
 observation_dim = 1
 belief_dim = 2
 action_dim = 1
 
 
-def final_cost(belief: jnp.ndarray) -> float:
-    goal: jnp.ndarray = jnp.array([0.0])
+def final_cost(belief: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_mean_cost: jnp.ndarray = jnp.diag(jnp.array([10.0]))
     final_covariance_cost: jnp.ndarray = jnp.diag(jnp.array([100.0]))
 
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
 
-    c = 0.5 * (mu - goal).T @ final_mean_cost @ (mu - goal)
+    c = 0.5 * (mu - goal_state).T @ final_mean_cost @ (mu - goal_state)
     c += jnp.trace(final_covariance_cost @ cov)
     return c
 
 
 def transient_cost(
-    belief: jnp.ndarray, action: jnp.ndarray, time: int
+    belief: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    goal: jnp.ndarray = jnp.array([0.0])
     mean_cost: jnp.ndarray = jnp.diag(jnp.array([0.0]))
     covariance_cost: jnp.ndarray = jnp.diag(jnp.array([10.0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([0.5]))
@@ -49,24 +43,10 @@ def transient_cost(
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
 
-    c = 0.5 * (mu - goal).T @ mean_cost @ (mu - goal)
+    c = 0.5 * (mu - goal_state).T @ mean_cost @ (mu - goal_state)
     c += jnp.trace(covariance_cost @ cov)
     c += 0.5 * action.T @ action_cost @ action
     return c
-
-
-belief_space: Box = Box(
-    low=jnp.ones((belief_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((belief_dim,)) * jnp.finfo(jnp.float64).max,
-    shape=(belief_dim,),
-)
-
-
-action_space: Box = Box(
-    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
-    shape=(action_dim,),
-)
 
 
 def dynamics(
@@ -74,6 +54,7 @@ def dynamics(
     action: jnp.ndarray,
     time: int,
 ) -> jnp.ndarray:
+    simulation_step = 0.1
     return state + simulation_step * action
 
 
@@ -124,21 +105,37 @@ def belief_dynamics(belief: jnp.ndarray,
     return next_belief
 
 
-key = jr.PRNGKey(1337)
-
-init_reference = Trajectory(
-    state=jnp.zeros((horizon + 1, belief_dim)),
-    action=jnp.zeros((horizon, action_dim)),
+belief_space: Box = Box(
+    low=jnp.ones((belief_dim,)) * jnp.finfo(jnp.float64).min,
+    high=jnp.ones((belief_dim,)) * jnp.finfo(jnp.float64).max,
+    shape=(belief_dim,),
 )
 
-init_policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, belief_dim)),
-    kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
+
+action_space: Box = Box(
+    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
+    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
+    shape=(action_dim,),
 )
 
 init_mu = jnp.array([-5.0])
 init_cov = jnp.eye(state_dim) * 5.0
 init_belief = jnp.hstack((init_mu, jnp.ravel(init_cov)))
+
+goal_state: jnp.ndarray = jnp.array([0.0])
+
+horizon = 100
+
+key = jr.PRNGKey(1337)
+init_policy = ilqr.LinearPolicy(
+    K=jnp.zeros((horizon, action_dim, belief_dim)),
+    kff=1e-2 * jr.normal(key, shape=(horizon, action_dim)),
+)
+
+init_reference = Trajectory(
+    state=jnp.zeros((horizon + 1, belief_dim)),
+    action=jnp.zeros((horizon, action_dim)),
+)
 
 options = ilqr.Hyperparameters()
 
@@ -146,12 +143,13 @@ start = clock.time()
 policy, reference, _ = ilqr.py_solver(
     final_cost,
     transient_cost,
+    goal_state,
     belief_dynamics,
+    init_belief,
     belief_space,
     init_policy,
     action_space,
     init_reference,
-    init_belief,
     options,
 )
 end = clock.time()
