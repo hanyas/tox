@@ -36,7 +36,8 @@ def double_integrator(
 ) -> jnp.ndarray:
     A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
     B: jnp.ndarray = jnp.array([[0.0], [1.0]])
-    return A @ state + B @ action
+    c: jnp.ndarray = jnp.array([0.0, 0.0])
+    return A @ state + B @ action + c
 
 
 simulation_step = 0.01
