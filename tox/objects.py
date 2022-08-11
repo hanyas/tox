@@ -3,7 +3,6 @@ import jax.numpy as jnp
 
 
 class Box:
-
     def __init__(self, low: jnp.ndarray, high: jnp.ndarray, shape: Tuple):
         self.low = low
         self.high = high
@@ -14,6 +13,26 @@ class Box:
 
     def clip(self, x: jnp.ndarray) -> jnp.ndarray:
         return jnp.clip(x, self.low, self.high)
+
+
+class BeliefTrajectory(NamedTuple):
+    mean: jnp.ndarray
+    variance: jnp.ndarray
+    action: jnp.ndarray
+
+    @property
+    def horizon(self):
+        return len(self.action)
+
+    @property
+    def final(self):
+        return self.mean[-1], self.variance[-1]
+
+    @property
+    def transient(self):
+        return BeliefTrajectory(
+            self.mean[:-1], self.variance[:-1], self.action
+        )
 
 
 class Trajectory(NamedTuple):
@@ -45,10 +64,10 @@ class QuadraticTransientCost(NamedTuple):
     Cxu: jnp.ndarray
     cx: jnp.ndarray
     cu: jnp.ndarray
-    c0: float
+    c0: jnp.ndarray
 
 
 class LinearDynamics(NamedTuple):
     A: jnp.ndarray
     B: jnp.ndarray
-    f0: jnp.ndarray
+    c: jnp.ndarray

@@ -60,10 +60,10 @@ def _backward_pass(
         quadratic_transient_cost.cx,
         quadratic_transient_cost.cu,
     )
-    A, B = linear_dynamics.A, linear_dynamics.B
+    A, B, c = linear_dynamics.A, linear_dynamics.B, linear_dynamics.c
 
     def _backwards(carry, params):
-        Cxx, Cuu, Cxu, cx, cu, A, B = params
+        Cxx, Cuu, Cxu, cx, cu, A, B, c = params
 
         Vxx, vx = carry
 
@@ -71,8 +71,8 @@ def _backward_pass(
         Quu = Cuu + B.T @ Vxx @ B
         Qux = (Cxu + A.T @ Vxx @ B).T
 
-        qx = cx + A.T @ vx
-        qu = cu + B.T @ vx
+        qx = cx + A.T @ Vxx @ c + A.T @ vx
+        qu = cu + B.T @ Vxx @ c + B.T @ vx
 
         K = -jsc.linalg.solve(Quu, Qux, sym_pos=True)
         kff = -jsc.linalg.solve(Quu, qu, sym_pos=True)
@@ -86,7 +86,7 @@ def _backward_pass(
     K, kff, cov = scan(
         f=_backwards,
         init=(fCxx, fcx),
-        xs=(Cxx, Cuu, Cxu, cx, cu, A, B),
+        xs=(Cxx, Cuu, Cxu, cx, cu, A, B, c),
         reverse=True,
     )[1]
 

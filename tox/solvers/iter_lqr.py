@@ -17,9 +17,9 @@ from tox.objects import (
 )
 
 from tox.helpers import (
-    quadratize_final_cost,
-    quadratize_transient_cost,
-    linearize_dynamics,
+    quadratize_delta_final_cost,
+    quadratize_delta_transient_cost,
+    linearize_delta_dynamics,
 )
 
 from tox.utils import symmetrize
@@ -56,7 +56,7 @@ class LinearPolicy(NamedTuple):
         )
 
 
-def _differential_backward_pass(
+def _delta_backward_pass(
     quadratic_final_cost: QuadraticFinalCost,
     quadratic_transient_cost: QuadraticTransientCost,
     linear_dynamics: LinearDynamics,
@@ -132,7 +132,7 @@ def _differential_backward_pass(
     return LinearPolicy(K, kff), dV, feasible
 
 
-_jit_backward_pass = jit(_differential_backward_pass)
+_jit_backward_pass = jit(_delta_backward_pass)
 
 
 def _linearize_quadratize(
@@ -142,15 +142,15 @@ def _linearize_quadratize(
     horizon = reference.horizon
     time = jnp.linspace(0, horizon, horizon + 1)
 
-    quadratic_final_cost = quadratize_final_cost(
+    quadratic_final_cost = quadratize_delta_final_cost(
         final_cost,
         goal_state,
         reference.final,
     )
-    quadratic_transient_cost = quadratize_transient_cost(
+    quadratic_transient_cost = quadratize_delta_transient_cost(
         transient_cost, goal_state, reference.transient, time[:-1]
     )
-    linear_dynamics = linearize_dynamics(
+    linear_dynamics = linearize_delta_dynamics(
         dynamics, state_space, reference.transient, time[:-1]
     )
 
@@ -434,7 +434,7 @@ def jax_solver(
                     next_policy,
                     dV,
                     backpass_feasible,
-                ) = _differential_backward_pass(
+                ) = _delta_backward_pass(
                     quadratic_final_cost,
                     quadratic_transient_cost,
                     linear_dynamics,
@@ -443,7 +443,7 @@ def jax_solver(
 
                 return next_policy, dV, backpass_feasible, lmbda, d_lmbda
 
-            next_policy, dV, backpass_feasible = _differential_backward_pass(
+            next_policy, dV, backpass_feasible = _delta_backward_pass(
                 quadratic_final_cost,
                 quadratic_transient_cost,
                 linear_dynamics,
