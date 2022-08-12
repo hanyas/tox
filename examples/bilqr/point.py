@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 state_dim = 1
 observation_dim = 1
-belief_dim = 2
+belief_dim = 2  # mu + cov
 action_dim = 1
 
 

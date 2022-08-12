@@ -12,8 +12,8 @@ from tox.objects import (
     QuadraticFinalCost,
     QuadraticTransientCost,
     LinearDynamics,
-    Box,
     Trajectory,
+    Box,
 )
 
 from tox.helpers import (
@@ -63,16 +63,9 @@ def _delta_backward_pass(
     lmbda: float,
 ) -> (LinearPolicy, Any, Any):
 
-    fCxx, fcx = quadratic_final_cost.Cxx, quadratic_final_cost.cx
-
-    Cxx, Cuu, Cxu, cx, cu = (
-        quadratic_transient_cost.Cxx,
-        quadratic_transient_cost.Cuu,
-        quadratic_transient_cost.Cxu,
-        quadratic_transient_cost.cx,
-        quadratic_transient_cost.cu,
-    )
-    A, B = linear_dynamics.A, linear_dynamics.B
+    fCxx, fcx, _ = quadratic_final_cost
+    Cxx, Cuu, Cxu, cx, cu, _ = quadratic_transient_cost
+    A, B, _ = linear_dynamics
 
     dV = jnp.zeros((2,))
 
@@ -90,10 +83,8 @@ def _delta_backward_pass(
 
         # Quu_reg = symmetrize(Quu + lmbda * jnp.eye(Quu.shape[0]))
 
-        Quu_reg = symmetrize(
-            Cuu + B.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B
-        )
-        Qux_reg = (Cxu + A.T @ (Vxx + lmbda * jnp.eye(Vxx.shape[0])) @ B).T
+        Quu_reg = symmetrize(Quu + B.T @ (lmbda * jnp.eye(Vxx.shape[0])) @ B)
+        Qux_reg = (Qux.T + A.T @ (lmbda * jnp.eye(Vxx.shape[0])) @ B).T
 
         feasability = jnp.all(jnp.linalg.eigvals(Quu_reg) > 0.0)
 

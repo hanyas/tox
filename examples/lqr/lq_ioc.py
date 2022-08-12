@@ -12,7 +12,6 @@ from tox.solvers import lqr
 
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
-
     c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
     return c
 

@@ -51,16 +51,9 @@ def _backward_pass(
     linear_dynamics: LinearDynamics,
 ) -> StochasticLinearPolicy:
 
-    fCxx, fcx = quadratic_final_cost.Cxx, quadratic_final_cost.cx
-
-    Cxx, Cuu, Cxu, cx, cu = (
-        quadratic_transient_cost.Cxx,
-        quadratic_transient_cost.Cuu,
-        quadratic_transient_cost.Cxu,
-        quadratic_transient_cost.cx,
-        quadratic_transient_cost.cu,
-    )
-    A, B, c = linear_dynamics.A, linear_dynamics.B, linear_dynamics.c
+    fCxx, fcx, _ = quadratic_final_cost
+    Cxx, Cuu, Cxu, cx, cu, _ = quadratic_transient_cost
+    A, B, c = linear_dynamics
 
     def _backwards(carry, params):
         Cxx, Cuu, Cxu, cx, cu, A, B, c = params
