@@ -8,7 +8,7 @@ from jax import jacobian as jac
 
 from tox.objects import Trajectory, Box
 from tox.utils import symmetrize
-from tox.solvers import iter_lqr as ilqr
+from tox.solvers import ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
@@ -111,7 +111,6 @@ belief_space: Box = Box(
     shape=(belief_dim,),
 )
 
-
 action_space: Box = Box(
     low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
     high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
@@ -140,7 +139,7 @@ init_reference = Trajectory(
 options = ilqr.Hyperparameters()
 
 start = clock.time()
-policy, reference, _ = ilqr.py_solver(
+policy, reference, trace = ilqr.py_solver(
     final_cost,
     transient_cost,
     goal_state,

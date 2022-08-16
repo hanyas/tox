@@ -5,7 +5,7 @@ import jax.numpy as jnp
 
 from tox.objects import Trajectory, Box
 from tox.utils import discretize_dynamics
-from tox.solvers import iter_lqr as ilqr
+from tox.solvers import ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
@@ -88,7 +88,6 @@ policy, reference, trace = ilqr.py_solver(
     init_reference,
     options,
 )
-
 end = clock.time()
 print("Compilation + Execution Time:", end - start)
 

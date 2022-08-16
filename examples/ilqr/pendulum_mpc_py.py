@@ -7,7 +7,7 @@ import jax.random as jr
 
 from tox.objects import Trajectory, Box
 from tox.utils import discretize_dynamics, wrap_angle
-from tox.solvers import iter_lqr as ilqr
+from tox.solvers import ilqr
 
 import time as clock
 import matplotlib.pyplot as plt

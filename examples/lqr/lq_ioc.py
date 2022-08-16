@@ -110,7 +110,7 @@ for t in range(1, horizon):
     obs_jac = jac(observation_mu, 0)(bel_mu, state[t - 1], t - 1)
     obs_cov = observation_cov
 
-    K = bel_cov @ obs_jac.T @ jnp.linalg.inv(obs_jac @ bel_cov @ obs_jac.T + obs_cov)
+    K = jnp.linalg.solve(obs_jac @ bel_cov @ obs_jac.T + obs_cov, obs_jac @ bel_cov).T
 
     bel_mu = bel_mu + K @ (obs - observation_mu(bel_mu, state[t - 1], t - 1))
     bel_cov = symmetrize(bel_cov - K @ (obs_jac @ bel_cov @ obs_jac.T + obs_cov) @ K.T)
