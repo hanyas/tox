@@ -139,7 +139,7 @@ init_reference = Trajectory(
 options = ilqr.Hyperparameters()
 
 start = clock.time()
-policy, reference, trace = ilqr.py_solver(
+policy, reference = ilqr.jax_solver(
     final_cost,
     transient_cost,
     goal_state,
