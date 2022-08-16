@@ -72,7 +72,7 @@ def quadratize_delta_transient_cost(
               + 0.5 * (u - ur).T * Ju(Jx(c)))(xr, ur) * (x - xr)
               + (x - xr).T * Jx(c)(xr, ur) + (u - ur).T * Ju(c)(xr, ur) + c(xr, ur)
     """
-    state, action = reference.state, reference.action
+    state, action = reference
 
     Cxx = hess(transient_cost, 0)(state, action, time, goal_state)
     Cuu = hess(transient_cost, 1)(state, action, time, goal_state)
@@ -85,6 +85,23 @@ def quadratize_delta_transient_cost(
 
 
 @partial(vmap, in_axes=(None, None, 0, 0))
+def linearize_delta_dynamics(
+    dynamics: Callable,
+    state_space: Box,
+    reference: Trajectory,
+    time: jnp.ndarray,
+) -> LinearDynamics:
+    """
+    f(x, u) = A(xr, ur) * (x - xr) + B(xr, ur) * (u - ur) + f(xr, ur)
+    """
+    state, action = reference
+
+    A = jac(state_space(dynamics), 0)(state, action, time)
+    B = jac(state_space(dynamics), 1)(state, action, time)
+    c = state_space(dynamics)(state, action, time)
+    return LinearDynamics(A, B, c)
+
+
 def quadratize_transient_cost(
     transient_cost: Callable,
     goal_state: jnp.ndarray,

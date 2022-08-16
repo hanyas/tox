@@ -89,13 +89,13 @@ def _delta_backward_pass(
         feasability = jnp.all(jnp.linalg.eigvals(Quu_reg) > 0.0)
 
         def _not_feasible(args):
-            Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
+            Vxx, vx, dV, Qxx, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
 
             K, kff = jnp.zeros_like(Qux), jnp.zeros_like(qu)
             return (Vxx, vx, dV), (K, kff, False)
 
         def _feasible(args):
-            Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
+            Vxx, vx, dV, Qxx, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
 
             K = -jsc.linalg.solve(Quu_reg, Qux_reg, sym_pos=True)
             kff = -jsc.linalg.solve(Quu_reg, qu, sym_pos=True)
@@ -110,7 +110,7 @@ def _delta_backward_pass(
             feasability,
             _feasible,
             _not_feasible,
-            (Vxx, vx, dV, Quu, Quu_reg, Qux, Qux_reg, qx, qu),
+            (Vxx, vx, dV, Qxx, Quu, Quu_reg, Qux, Qux_reg, qx, qu),
         )
 
     (_, _, dV), (K, kff, feasible) = scan(
@@ -421,11 +421,7 @@ def jax_solver(
                 )
                 lmbda = jnp.maximum(lmbda * d_lmbda, options.min_lmbda)
 
-                (
-                    next_policy,
-                    dV,
-                    backpass_feasible,
-                ) = _delta_backward_pass(
+                (next_policy, dV, backpass_feasible,) = _delta_backward_pass(
                     quadratic_final_cost,
                     quadratic_transient_cost,
                     linear_dynamics,
