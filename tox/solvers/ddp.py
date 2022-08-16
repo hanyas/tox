@@ -755,7 +755,7 @@ def rollout(
     policy: LinearPolicy,
     action_space: Box,
     reference: Trajectory,
-    alpha: float = 1.0,
+    alpha: float = 0.0,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray):
     def episode(state, time):
         action = action_space.clip(policy(state, time, reference, alpha))

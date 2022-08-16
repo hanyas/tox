@@ -919,7 +919,7 @@ def forward_pass(
     policy: LinearPolicy,
     action_space: Box,
     reference: BeliefTrajectory,
-    alpha: float = 1.0,
+    alpha: float = 0.0,
 ) -> (jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray):
     def _extended_kalman(
         bel_mu: jnp.ndarray,
