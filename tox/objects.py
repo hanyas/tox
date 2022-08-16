@@ -71,3 +71,9 @@ class LinearDynamics(NamedTuple):
     A: jnp.ndarray
     B: jnp.ndarray
     c: jnp.ndarray
+
+
+class parPolicy(NamedTuple):
+    K: jnp.ndarray
+    Kv: jnp.ndarray
+    Kc: jnp.ndarray

@@ -166,3 +166,42 @@ def linearize_dynamics(
     B = jac(state_space(dynamics), 1)(state, action, time)
     c = state_space(dynamics)(state, action, time) - A @ state - B @ action
     return LinearDynamics(A, B, c)
+
+
+def quadratize_final_cost_par(
+    final_cost: Callable, state: jnp.ndarray
+) -> QuadraticFinalCost:
+    # f(x, u) = 0.5 * (x - xr).T * Cxx(xr, ur) * (x - xr)
+    #           + (x - xr).T * cx + f(xr, ur)
+    Cxx = hess(final_cost, 0)(state)
+    cx = jac(final_cost, 0)(state)
+    c0 = final_cost(state)
+    return QuadraticFinalCost(Cxx, cx, c0)
+
+
+@partial(vmap, in_axes=(None, 0))
+def quadratize_transient_cost_par(
+    transient_cost: Callable, reference: Trajectory
+) -> QuadraticTransientCost:
+
+    Cxx = hess(transient_cost, 0)(reference.state, reference.action)
+    Cuu = hess(transient_cost, 1)(reference.state, reference.action)
+    Cxu = jac(jac(transient_cost, 0), 1)(
+        reference.state, reference.action
+    )
+
+    cx = jac(transient_cost, 0)(reference.state, reference.action)
+    cu = jac(transient_cost, 1)(reference.state, reference.action)
+    c0 = transient_cost(reference.state, reference.action)
+    return QuadraticTransientCost(Cxx, Cuu, Cxu, cx, cu, c0)
+
+
+@partial(vmap, in_axes=(None, None, 0))
+def linearization(
+    dynamics: Callable, state_space: Box, reference: Trajectory,
+) -> LinearDynamics:
+
+    A = jac(state_space(dynamics), 0)(reference.state, reference.action)
+    B = jac(state_space(dynamics), 1)(reference.state, reference.action)
+    f0 = state_space(dynamics)(reference.state, reference.action)
+    return LinearDynamics(A, B, f0)
