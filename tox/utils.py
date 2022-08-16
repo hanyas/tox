@@ -1,5 +1,6 @@
 from typing import Callable
 
+import jax
 import jax.numpy as jnp
 from jax.lax import fori_loop
 
@@ -52,3 +53,81 @@ def discretize_dynamics(ode: Callable, simulation_step: float, downsampling: int
         )
 
     return dynamics
+
+
+# https://github.com/AdrienCorenflos/sqrt-parallel-smoothers
+def tria(A):
+    return qr(A.T).T
+
+
+@jax.custom_jvp
+def qr(A: jnp.ndarray):
+    """The JAX provided implementation is not parallelizable using VMAP. As a consequence, we have to rewrite it..."""
+    return _qr(A)
+
+
+# @partial(jax.jit, static_argnums=(1,))
+def _qr(A: jnp.ndarray, return_q=False):
+    m, n = A.shape
+    min_ = min(m, n)
+    if return_q:
+        Q = jnp.eye(m)
+
+    for j in range(min_):
+        # Apply Householder transformation.
+        v, tau = _householder(A[j:, j])
+
+        H = jnp.eye(m)
+        H = H.at[j:, j:].add(-tau * (v[:, None] @ v[None, :]))
+
+        A = H @ A
+        if return_q:
+            Q = H @ Q  # noqa
+
+    R = jnp.triu(A[:min_, :min_])
+    if return_q:
+        return Q[:n].T, R  # noqa
+    else:
+        return R
+
+
+def _householder(a):
+    if a.dtype == jnp.float64:
+        eps = 1e-9
+    else:
+        eps = 1e-7
+
+    alpha = a[0]
+    s = jnp.sum(a[1:] ** 2)
+    cond = s < eps
+
+    def if_not_cond(v):
+        t = (alpha ** 2 + s) ** 0.5
+        v0 = jax.lax.cond(alpha <= 0, lambda _: alpha - t, lambda _: -s / (alpha + t), None)
+        tau = 2 * v0 ** 2 / (s + v0 ** 2)
+        v = v / v0
+        v = v.at[0].set(1.)
+        return v, tau
+
+    return jax.lax.cond(cond, lambda v: (v, 0.), if_not_cond, a)
+
+
+def qr_jvp_rule(primals, tangents):
+    x, = primals
+    dx, = tangents
+    q, r = _qr(x, True)
+    m, n = x.shape
+    min_ = min(m, n)
+    if m < n:
+        dx = dx[:, :m]
+    dx_rinv = jax.lax.linalg.triangular_solve(r, dx)
+    qt_dx_rinv = jnp.matmul(q.T, dx_rinv)
+    qt_dx_rinv_lower = jnp.tril(qt_dx_rinv, -1)
+    do = qt_dx_rinv_lower - qt_dx_rinv_lower.T  # This is skew-symmetric
+    # The following correction is necessary for complex inputs
+    do = do + jnp.eye(min_, dtype=do.dtype) * (qt_dx_rinv - jnp.real(qt_dx_rinv))
+    dr = jnp.matmul(qt_dx_rinv - do, r)
+    return r, dr
+
+
+qr.defjvp(qr_jvp_rule)
