@@ -111,28 +111,7 @@ init_reference = BeliefTrajectory(
     action=jnp.zeros((horizon, action_dim)),
 )
 
-options = bsp_ilqr.Hyperparameters()
-
-start = clock.time()
-policy, reference, trace = bsp_ilqr.py_solver(
-    final_cost,
-    transient_cost,
-    goal_state,
-    dynamics_mean,
-    dynamics_noise,
-    init_mu,
-    init_cov,
-    state_space,
-    observation_mean,
-    observation_noise,
-    observation_space,
-    init_policy,
-    action_space,
-    init_reference,
-    options,
-)
-end = clock.time()
-print("Compilation + Execution Time:", end - start)
+options = bsp_ilqr.Hyperparameters(tol_fun=1e-4, tol_grad=1e-4)
 
 start = clock.time()
 policy, reference = bsp_ilqr.jax_solver(
