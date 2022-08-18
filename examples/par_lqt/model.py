@@ -14,24 +14,42 @@ state_dim = 2
 action_dim = 1
 
 
-def _final_cost(state: jnp.ndarray) -> float:
-    goal: jnp.ndarray = jnp.array([10.0, 0.0])
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+# def _final_cost(state: jnp.ndarray) -> float:
+#     goal: jnp.ndarray = jnp.array([10.0, 0.0])
+#     final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+#
+#     c = (state - goal).T @ final_state_cost @ (state - goal)
+#     return c * (simulation_step * downsampling)
+#
+#
+# def _transient_cost(
+#         state: jnp.ndarray, action: jnp.ndarray
+# ) -> float:
+#     goal: jnp.ndarray = jnp.array([10.0, 0.0])
+#     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+#     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
+#
+#     c = (state - goal).T @ state_cost @ (state - goal)
+#     c += action.T @ action_cost @ action
+#     return c * (simulation_step * downsampling)
 
-    c = (state - goal).T @ final_state_cost @ (state - goal)
-    return c * (simulation_step * downsampling)
+
+def _final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
+    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+    c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
+    return c
 
 
 def _transient_cost(
-        state: jnp.ndarray, action: jnp.ndarray
+    state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
-    goal: jnp.ndarray = jnp.array([10.0, 0.0])
+
     state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
     action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
 
-    c = (state - goal).T @ state_cost @ (state - goal)
-    c += action.T @ action_cost @ action
-    return c * (simulation_step * downsampling)
+    c = 0.5 * (state - goal_state).T @ state_cost @ (state - goal_state)
+    c += 0.5 * action.T @ action_cost @ action
+    return c
 
 
 def par_double_integrator(state: jnp.ndarray, action: jnp.ndarray) -> jnp.ndarray:
@@ -54,7 +72,7 @@ def par_runge_kutta(
     return state + step / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-def _dynamics(state: jnp.ndarray, action: jnp.ndarray):
+def _dynamics(state: jnp.ndarray, action: jnp.ndarray, time):
     return par_runge_kutta(state, action, par_double_integrator, simulation_step)
 
 
@@ -74,6 +92,8 @@ _reference = Trajectory(
 )
 
 
+
+
 def model_parameters():
     final_cost = partial(_final_cost)
     transient_cost = partial(_transient_cost)
@@ -81,5 +101,6 @@ def model_parameters():
     state_space = partial(_state_space)
     action_space = partial(_action_space)
     reference = _reference
+    goal_state: jnp.ndarray = jnp.array([10.0, 0.0])
 
-    return final_cost, transient_cost, dynamics, state_space, action_space, reference
+    return final_cost, transient_cost, dynamics, state_space, action_space, reference, goal_state

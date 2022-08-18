@@ -12,7 +12,6 @@ def parBackwardPass(quadratic_final_cost: QuadraticFinalCost,
                     quadratic_transient_cost: QuadraticTransientCost,
                     linear_dynamics: LinearDynamics,
                     reference: Trajectory):
-
     generic_params = value_function_associative_params(quadratic_transient_cost, linear_dynamics)
     final_params = value_function_associative_params_final(quadratic_final_cost)
     associative_params = jax.tree_map(lambda x, y: jnp.concatenate([x, y[None, ...]]),

@@ -1,14 +1,15 @@
 import jax.numpy as jnp
 from examples.par_lqt.model import model_parameters
-from tox.helpers import linearization, quadratize_final_cost_par, quadratize_transient_cost_par
+from tox.helpers import linearize_dynamics, quadratize_final_cost, quadratize_transient_cost
 from tox.solvers.parallel.par_lqt import parBackwardPass, parForwardPass
 from matplotlib import pyplot as plt
 
 
-final_cost, transient_cost, dynamics, state_space, action_space, reference = model_parameters()
-quadratic_final_cost = quadratize_final_cost_par(final_cost, reference.final)
-quadratic_transient_cost = quadratize_transient_cost_par(transient_cost, reference.transient)
-linear_dynamics = linearization(dynamics, state_space, reference.transient)
+final_cost, transient_cost, dynamics, state_space, action_space, reference, goal_state = model_parameters()
+time = jnp.linspace(0, reference.horizon, reference.horizon + 1)
+quadratic_final_cost = quadratize_final_cost(final_cost, goal_state, reference.final)
+quadratic_transient_cost = quadratize_transient_cost(transient_cost, goal_state, reference.transient, time[:-1])
+linear_dynamics = linearize_dynamics(dynamics, state_space, reference.transient, time[:-1])
 xs_init = jnp.zeros((2,))
 
 
