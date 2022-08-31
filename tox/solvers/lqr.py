@@ -56,8 +56,8 @@ def _backward_pass(
         qx = cx + A.T @ Vxx @ c + A.T @ vx
         qu = cu + B.T @ Vxx @ c + B.T @ vx
 
-        K = -jsc.linalg.solve(Quu, Qux, sym_pos=True)
-        kff = -jsc.linalg.solve(Quu, qu, sym_pos=True)
+        K = -jsc.linalg.solve(Quu, Qux, assume_a='pos')
+        kff = -jsc.linalg.solve(Quu, qu, assume_a='pos')
 
         Vxx = symmetrize(Qxx + Qux.T @ K)
         vx = qx + Qux.T @ kff
