@@ -97,8 +97,8 @@ def _delta_backward_pass(
         def _feasible(args):
             Vxx, vx, dV, Qxx, Quu, Quu_reg, Qux, Qux_reg, qx, qu = args
 
-            K = -jsc.linalg.solve(Quu_reg, Qux_reg, sym_pos=True)
-            kff = -jsc.linalg.solve(Quu_reg, qu, sym_pos=True)
+            K = -jsc.linalg.solve(Quu_reg, Qux_reg, assume_a='pos')
+            kff = -jsc.linalg.solve(Quu_reg, qu, assume_a='pos')
 
             Vxx = symmetrize(Qxx + K.T @ Quu @ K + K.T @ Qux + Qux.T @ K)
             vx = qx + K.T @ Quu @ kff + K.T @ qu + Qux.T @ kff
