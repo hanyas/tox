@@ -83,8 +83,8 @@ def _diff_backward_pass(
         def _feasible(args):
             Vxx, vx, dV, Qxx, Quu, Quu_reg, Qux, qx, qu = args
 
-            K = -jsc.linalg.solve(Quu_reg, Qux, sym_pos=True)
-            kff = -jsc.linalg.solve(Quu_reg, qu, sym_pos=True)
+            K = -jsc.linalg.solve(Quu_reg, Qux, assume_a='pos')
+            kff = -jsc.linalg.solve(Quu_reg, qu, assume_a='pos')
 
             Vxx = symmetrize(Qxx + Qux.T @ K)
             vx = qx + Qux.T @ kff

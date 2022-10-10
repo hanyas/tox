@@ -113,8 +113,8 @@ def _diff_backward_pass(
                 qu,
             ) = args
 
-            K = -jsc.linalg.solve(Quu_reg, Qub, sym_pos=True)
-            kff = -jsc.linalg.solve(Quu_reg, qu, sym_pos=True)
+            K = -jsc.linalg.solve(Quu_reg, Qub, assume_a='pos')
+            kff = -jsc.linalg.solve(Quu_reg, qu, assume_a='pos')
 
             Vbb = symmetrize(Qbb + Qub.T @ K)
             vb = qb + Qub.T @ kff
