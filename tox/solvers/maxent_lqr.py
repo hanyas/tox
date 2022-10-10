@@ -16,7 +16,7 @@ from tox.objects import (
     Box,
 )
 
-from tox.helpers import (
+from tox.approximations import (
     quadratize_final_cost,
     quadratize_transient_cost,
     linearize_dynamics,

@@ -5,6 +5,18 @@ import jax.numpy as jnp
 from jax.lax import fori_loop
 
 
+def unflatten_gaussian(state: jnp.ndarray, state_dim: int):
+    mu = state[:state_dim]
+    tril = jnp.zeros((state_dim, state_dim))
+    chol = tril.at[jnp.tril_indices(state_dim)].set(state[state_dim:])
+    return mu, chol
+
+
+def flatten_gaussian(mu: jnp.ndarray, chol: jnp.ndarray, state_dim: int):
+    state = jnp.hstack((mu, chol[jnp.tril_indices(state_dim)]))
+    return state
+
+
 def wrap_angle(x: float) -> float:
     # wrap angle between [0, 2*pi]
     return x % (2.0 * jnp.pi)
@@ -28,13 +40,14 @@ def runge_kutta(
     return state + step / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-def discretize_dynamics(ode: Callable, simulation_step: float, downsampling: int):
+def discretize_dynamics(
+    ode: Callable, simulation_step: float, downsampling: int
+):
     def dynamics(
         state: jnp.ndarray,
         action: jnp.ndarray,
         time: int,
     ):
-
         def _step(t, state):
             next_state = runge_kutta(
                 state,
@@ -102,19 +115,21 @@ def _householder(a):
     cond = s < eps
 
     def if_not_cond(v):
-        t = (alpha ** 2 + s) ** 0.5
-        v0 = jax.lax.cond(alpha <= 0, lambda _: alpha - t, lambda _: -s / (alpha + t), None)
-        tau = 2 * v0 ** 2 / (s + v0 ** 2)
+        t = (alpha**2 + s) ** 0.5
+        v0 = jax.lax.cond(
+            alpha <= 0, lambda _: alpha - t, lambda _: -s / (alpha + t), None
+        )
+        tau = 2 * v0**2 / (s + v0**2)
         v = v / v0
-        v = v.at[0].set(1.)
+        v = v.at[0].set(1.0)
         return v, tau
 
-    return jax.lax.cond(cond, lambda v: (v, 0.), if_not_cond, a)
+    return jax.lax.cond(cond, lambda v: (v, 0.0), if_not_cond, a)
 
 
 def qr_jvp_rule(primals, tangents):
-    x, = primals
-    dx, = tangents
+    (x,) = primals
+    (dx,) = tangents
     q, r = _qr(x, True)
     m, n = x.shape
     min_ = min(m, n)
@@ -125,7 +140,9 @@ def qr_jvp_rule(primals, tangents):
     qt_dx_rinv_lower = jnp.tril(qt_dx_rinv, -1)
     do = qt_dx_rinv_lower - qt_dx_rinv_lower.T  # This is skew-symmetric
     # The following correction is necessary for complex inputs
-    do = do + jnp.eye(min_, dtype=do.dtype) * (qt_dx_rinv - jnp.real(qt_dx_rinv))
+    do = do + jnp.eye(min_, dtype=do.dtype) * (
+        qt_dx_rinv - jnp.real(qt_dx_rinv)
+    )
     dr = jnp.matmul(qt_dx_rinv - do, r)
     return r, dr
 
