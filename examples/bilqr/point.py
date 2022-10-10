@@ -21,8 +21,8 @@ action_dim = 1
 
 
 def final_cost(belief: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_mean_cost: jnp.ndarray = jnp.diag(jnp.array([10.0]))
-    final_covariance_cost: jnp.ndarray = jnp.diag(jnp.array([100.0]))
+    final_mean_cost = jnp.diag(jnp.array([10.0]))
+    final_covariance_cost = jnp.diag(jnp.array([100.0]))
 
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
@@ -36,9 +36,9 @@ def transient_cost(
     belief: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    mean_cost: jnp.ndarray = jnp.diag(jnp.array([0.0]))
-    covariance_cost: jnp.ndarray = jnp.diag(jnp.array([10.0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([0.5]))
+    mean_cost = jnp.diag(jnp.array([0.0]))
+    covariance_cost = jnp.diag(jnp.array([10.0]))
+    action_cost = jnp.diag(jnp.array([0.5]))
 
     mu = belief[:state_dim]
     cov = jnp.reshape(belief[state_dim:], (state_dim, state_dim))
@@ -75,7 +75,7 @@ def observation(
 def observation_noise(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-    beacon: jnp.ndarray = jnp.array([5.0])
+    beacon = jnp.array([5.0])
     return 0.5 * (beacon - state)**2 * jnp.eye(observation_dim)
 
 
@@ -121,7 +121,7 @@ init_mu = jnp.array([-5.0])
 init_cov = jnp.eye(state_dim) * 5.0
 init_belief = jnp.hstack((init_mu, jnp.ravel(init_cov)))
 
-goal_state: jnp.ndarray = jnp.array([0.0])
+goal_state = jnp.array([0.0])
 
 horizon = 100
 
@@ -139,7 +139,7 @@ init_reference = Trajectory(
 options = ilqr.Hyperparameters()
 
 start = clock.time()
-policy, reference = ilqr.jax_solver(
+policy, reference, _ = ilqr.jax_solver(
     final_cost,
     transient_cost,
     goal_state,

@@ -1,21 +1,20 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
-# config.update("jax_log_compiles", 1)
 
 import jax.numpy as jnp
 import jax.random as jr
 from jax import block_until_ready
 
-from tox.objects import Trajectory, Box
+from tox.objects import Box
 from tox.utils import discretize_dynamics, wrap_angle
-from tox.solvers import ilqr
+from tox.solvers import ilqr as ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
 
 
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
+    final_state_cost = jnp.diag(jnp.array([1e0, 1e-1]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
     c = 0.5 * (_wrapped - goal_state).T @ final_state_cost @ (_wrapped - goal_state)
@@ -26,8 +25,8 @@ def transient_cost(
     state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e0, 1e-1]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3]))
+    state_cost = jnp.diag(jnp.array([1e0, 1e-1]))
+    action_cost = jnp.diag(jnp.array([1e-3]))
 
     _wrapped = jnp.hstack((wrap_angle(state[0]), state[1]))
     c = 0.5 * (_wrapped - goal_state).T @ state_cost @ (_wrapped - goal_state)
@@ -39,10 +38,10 @@ def pendulum(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
 
-    gravity: float = 9.81
-    length: float = 1.0
-    mass: float = 1.0
-    damping: float = 1e-3
+    gravity = 9.81
+    length = 1.0
+    mass = 1.0
+    damping = 1e-3
 
     position, velocity = state
     return jnp.hstack(
@@ -81,34 +80,26 @@ goal_state = jnp.array([jnp.pi, 0.0])
 nb_steps = 100
 horizon = 25
 
-key = jr.PRNGKey(747)
+key = jr.PRNGKey(1337)
 
 key, policy_key = jr.split(key, 2)
-policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=1e-2 * jr.normal(policy_key, shape=(horizon, action_dim)),
-)
+control = 1e-2 * jr.normal(policy_key, shape=(horizon, action_dim))
 
-reference = Trajectory(
-    state=jnp.zeros((horizon + 1, state_dim)),
-    action=jnp.zeros((horizon, action_dim)),
-)
-
-options = ilqr.Hyperparameters(max_iter=25)
+options = ilqr.Hyperparameters(max_iter=50)
 
 start = clock.time()
-state, action = ilqr.mpc_rollout(
+state, action, cost = ilqr.exact_mpc_rollout(
     final_cost,
     transient_cost,
     goal_state,
     dynamics,
     init_state,
     state_space,
-    policy,
+    control,
     action_space,
-    reference,
-    options,
+    horizon,
     nb_steps,
+    options,
 )
 block_until_ready(state)
 end = clock.time()
@@ -130,29 +121,21 @@ plt.show()
 init_state = jnp.array([wrap_angle(-0.01), 0.01])
 
 key, policy_key = jr.split(key, 2)
-policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=1e-2 * jr.normal(policy_key, shape=(horizon, action_dim)),
-)
-
-reference = Trajectory(
-    state=jnp.zeros((horizon + 1, state_dim)),
-    action=jnp.zeros((horizon, action_dim)),
-)
+control = 1e-2 * jr.normal(policy_key, shape=(horizon, action_dim))
 
 start = clock.time()
-state, action = ilqr.mpc_rollout(
+state, action, cost = ilqr.exact_mpc_rollout(
     final_cost,
     transient_cost,
     goal_state,
     dynamics,
     init_state,
     state_space,
-    policy,
+    control,
     action_space,
-    reference,
-    options,
+    horizon,
     nb_steps,
+    options,
 )
 block_until_ready(state)
 end = clock.time()

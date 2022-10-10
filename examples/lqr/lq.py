@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+    final_state_cost = jnp.diag(jnp.array([1e1, 1e0]))
     c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
     return c
 
@@ -22,8 +22,8 @@ def transient_cost(
     state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
+    state_cost = jnp.diag(jnp.array([1e1, 1e0]))
+    action_cost = jnp.diag(jnp.array([1e0]))
 
     c = 0.5 * (state - goal_state).T @ state_cost @ (state - goal_state)
     c += 0.5 * action.T @ action_cost @ action
@@ -33,9 +33,9 @@ def transient_cost(
 def double_integrator(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-    A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
-    B: jnp.ndarray = jnp.array([[0.0], [1.0]])
-    c: jnp.ndarray = jnp.array([0.0, 0.0])
+    A = jnp.array([[0.0, 1.0], [0.0, 0.0]])
+    B = jnp.array([[0.0], [1.0]])
+    c = jnp.array([0.0, 0.0])
     return A @ state + B @ action + c
 
 
@@ -60,7 +60,7 @@ action_space: Box = Box(
     shape=(action_dim,),
 )
 
-goal_state: jnp.ndarray = jnp.array([10.0, 0.0])
+goal_state = jnp.array([10.0, 0.0])
 horizon = 50
 
 start = clock.time()
@@ -74,7 +74,7 @@ policy = lqr.solver(
     horizon
 )
 
-init_state: jnp.ndarray = jnp.array([0.0, 0.0])
+init_state = jnp.array([0.0, 0.0])
 episode = lqr.rollout(
     final_cost,
     transient_cost,

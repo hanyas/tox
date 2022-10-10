@@ -5,14 +5,14 @@ import jax.numpy as jnp
 
 from tox.objects import Trajectory, Box
 from tox.utils import discretize_dynamics
-from tox.solvers import ilqr
+from tox.solvers import ilqr as ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
 
 
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
+    final_state_cost = jnp.diag(jnp.array([1e1, 1e0]))
     c = 0.5 * (state - goal_state).T @ final_state_cost @ (state - goal_state)
     return c
 
@@ -21,8 +21,8 @@ def transient_cost(
     state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([1e1, 1e0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e0]))
+    state_cost = jnp.diag(jnp.array([1e1, 1e0]))
+    action_cost = jnp.diag(jnp.array([1e0]))
 
     c = 0.5 * (state - goal_state).T @ state_cost @ (state - goal_state)
     c += 0.5 * action.T @ action_cost @ action
@@ -32,8 +32,8 @@ def transient_cost(
 def double_integrator(
     state: jnp.ndarray, action: jnp.ndarray, time: int
 ) -> jnp.ndarray:
-    A: jnp.ndarray = jnp.array([[0.0, 1.0], [0.0, 0.0]])
-    B: jnp.ndarray = jnp.array([[0.0], [1.0]])
+    A = jnp.array([[0.0, 1.0], [0.0, 0.0]])
+    B = jnp.array([[0.0], [1.0]])
     return A @ state + B @ action
 
 

@@ -1,21 +1,20 @@
 from jax.config import config
 config.update("jax_enable_x64", True)
-# config.update("jax_log_compiles", 1)
 
 import jax.numpy as jnp
 import jax.random as jr
 from jax import block_until_ready
 
-from tox.objects import Trajectory, Box
+from tox.objects import Box
 from tox.utils import discretize_dynamics, wrap_angle
-from tox.solvers import ilqr
+from tox.solvers import ilqr as ilqr
 
 import time as clock
 import matplotlib.pyplot as plt
 
 
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_state_cost: jnp.ndarray = jnp.diag(jnp.array([1e4, 1e4, 1e4, 1e4]))
+    final_state_cost = jnp.diag(jnp.array([1e4, 1e4, 1e4, 1e4]))
 
     _wrapped = jnp.hstack(
         (
@@ -33,8 +32,8 @@ def transient_cost(
     state: jnp.ndarray, action: jnp.ndarray, time: int, goal_state: jnp.ndarray
 ) -> float:
 
-    state_cost: jnp.ndarray = jnp.diag(jnp.array([0.0, 0.0, 0.0, 0.0]))
-    action_cost: jnp.ndarray = jnp.diag(jnp.array([1e-3, 1e-3]))
+    state_cost = jnp.diag(jnp.array([0.0, 0.0, 0.0, 0.0]))
+    action_cost = jnp.diag(jnp.array([1e-3, 1e-3]))
 
     _wrapped = jnp.hstack(
         (
@@ -151,96 +150,28 @@ nb_steps = 100
 horizon = 50
 
 key = jr.PRNGKey(747)
-
-key, policy_key = jr.split(key, 2)
-policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=1e-2 * jr.normal(policy_key, shape=(horizon, action_dim)),
-)
-
-reference = Trajectory(
-    state=jnp.zeros((horizon + 1, state_dim)),
-    action=jnp.zeros((horizon, action_dim)),
-)
+key, control_key = jr.split(key, 2)
+control = 1e-2 * jr.normal(control_key, shape=(horizon, action_dim))
 
 options = ilqr.Hyperparameters(max_iter=250)
 
 start = clock.time()
-state, action = ilqr.mpc_rollout(
+state, action, cost = ilqr.exact_mpc_rollout(
     final_cost,
     transient_cost,
     goal_state,
     dynamics,
     init_state,
     state_space,
-    policy,
+    control,
     action_space,
-    reference,
-    options,
+    horizon,
     nb_steps,
+    options,
 )
 block_until_ready(state)
 end = clock.time()
 print("Compilation + Execution Time:", end - start)
-
-plt.subplot(6, 1, 1)
-plt.plot(state[:, 0])
-plt.ylabel("q1")
-plt.subplot(6, 1, 2)
-plt.plot(state[:, 1])
-plt.ylabel("q2")
-plt.subplot(6, 1, 3)
-plt.plot(state[:, 2])
-plt.ylabel("dq1")
-plt.subplot(6, 1, 4)
-plt.plot(state[:, 3])
-plt.ylabel("dq2")
-plt.subplot(6, 1, 5)
-plt.plot(action[:, 0])
-plt.ylabel("u1")
-plt.subplot(6, 1, 6)
-plt.plot(action[:, 1])
-plt.ylabel("u2")
-plt.xlabel("t")
-plt.show()
-
-init_state = jnp.array(
-    [
-        wrap_angle(0.01),
-        wrap_angle(-0.01),
-        0.01,
-        -0.01,
-    ]
-)
-
-key, policy_key = jr.split(key, 2)
-policy = ilqr.LinearPolicy(
-    K=jnp.zeros((horizon, action_dim, state_dim)),
-    kff=1e-2 * jr.normal(policy_key, shape=(horizon, action_dim)),
-)
-
-reference = Trajectory(
-    state=jnp.zeros((horizon + 1, state_dim)),
-    action=jnp.zeros((horizon, action_dim)),
-)
-
-start = clock.time()
-state, action = ilqr.mpc_rollout(
-    final_cost,
-    transient_cost,
-    goal_state,
-    dynamics,
-    init_state,
-    state_space,
-    policy,
-    action_space,
-    reference,
-    options,
-    nb_steps,
-)
-block_until_ready(state)
-end = clock.time()
-print("Execution Time:", end - start)
 
 plt.subplot(6, 1, 1)
 plt.plot(state[:, 0])

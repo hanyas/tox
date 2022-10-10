@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax.random as jr
 
 from tox.objects import Box
+from tox.utils import discretize_dynamics
 from tox.utils import unflatten_gaussian, flatten_gaussian
 
 from tox.filtering import sqrt_kalman_filter_dynamics
@@ -13,13 +14,14 @@ from tox.filtering import sqrt_kalman_filter
 
 from tox.solvers import bsp_ilqr as bsp_ilqr
 
+from time import time as clock
 import matplotlib.pyplot as plt
 
 
-state_dim = 1
+state_dim = 4
 belief_dim = state_dim + int(state_dim + state_dim * (state_dim - 1) / 2)
-observation_dim = 1
-action_dim = 1
+observation_dim = 2
+action_dim = 2
 
 state_space: Box = Box(
     low=jnp.ones((state_dim,)) * jnp.finfo(jnp.float64).min,
@@ -34,10 +36,29 @@ observation_space: Box = Box(
 )
 
 action_space: Box = Box(
-    low=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).min,
-    high=jnp.ones((action_dim,)) * jnp.finfo(jnp.float64).max,
+    low=jnp.array([-10.0, -2.0 * jnp.pi]),
+    high=jnp.array([10.0, 2.0 * jnp.pi]),
     shape=(action_dim,),
 )
+
+
+def car(state: jnp.ndarray, action: jnp.ndarray, time: int) -> jnp.ndarray:
+    length = 0.1
+    return jnp.hstack(
+        [
+            state[3] * jnp.cos(state[2]),
+            state[3] * jnp.sin(state[2]),
+            state[3] * jnp.tan(action[1]) / length,
+            action[0],
+        ]
+    )
+
+
+simulation_step = 0.1
+downsampling = 1
+dynamics_mean = discretize_dynamics(
+        ode=car, simulation_step=simulation_step, downsampling=downsampling
+    )
 
 
 def dynamics(
@@ -46,8 +67,7 @@ def dynamics(
     delta: jnp.ndarray,
     time: int,
 ) -> jnp.ndarray:
-    simulation_step = 0.1
-    return state + simulation_step * action + 1e-2 * jnp.eye(1) @ delta
+    return dynamics_mean(state, action, time) + 1e-2 * jnp.eye(4) @ delta
 
 
 def observation(
@@ -55,12 +75,14 @@ def observation(
     eta: jnp.ndarray,
     time: int,
 ) -> jnp.ndarray:
-    beacon = jnp.array([5.0])
+    beacon = jnp.array([-5.0, 5.0])
     return (
-        state
+        state[:2]
         + (
-            1e-2 * jnp.eye(1)
-            + jnp.linalg.cholesky(0.5 * (beacon - state) ** 2 * jnp.eye(1))
+            jnp.linalg.cholesky(
+                (1e-4 + 0.1 * (beacon - state[:2]).T @ (beacon - state[:2]))
+                * jnp.eye(2)
+            )
         )
         @ eta
     )
@@ -81,8 +103,8 @@ def final_belief_cost(
 
     bel_mu, bel_chol = unflatten_belief(belief)
 
-    final_mean_cost = jnp.diag(jnp.array([10.0]))
-    final_covariance_cost = jnp.diag(jnp.array([100.0]))
+    final_mean_cost = jnp.diag(jnp.array([1e2, 1e2, 1e2, 1e2]))
+    final_covariance_cost = jnp.diag(jnp.array([1e2, 1e2, 1e2, 1e2]))
 
     c = 0.5 * (bel_mu - goal_state).T @ final_mean_cost @ (bel_mu - goal_state)
     c += 0.5 * jnp.trace(final_covariance_cost @ (bel_chol @ bel_chol.T))
@@ -98,9 +120,9 @@ def transient_belief_cost(
 
     bel_mu, bel_chol = unflatten_belief(belief)
 
-    mean_cost = jnp.diag(jnp.array([0.0]))
-    covariance_cost = jnp.diag(jnp.array([10.0]))
-    action_cost = jnp.diag(jnp.array([0.5]))
+    mean_cost = jnp.diag(jnp.array([1e0, 1e0, 1e0, 1e0]))
+    covariance_cost = jnp.diag(jnp.array([1e2, 1e2, 1e2, 1e2]))
+    action_cost = jnp.diag(jnp.array([0.1, 0.1]))
 
     c = 0.5 * (bel_mu - goal_state).T @ mean_cost @ (bel_mu - goal_state)
     c += 0.5 * jnp.trace(covariance_cost @ (bel_chol @ bel_chol.T))
@@ -117,47 +139,6 @@ belief_dynamics = sqrt_kalman_filter_dynamics(
     unflatten_belief,
 )
 
-horizon = 100
-
-init_mu = jnp.array([-5.0])
-init_chol = jnp.eye(state_dim) * 1.0
-
-init_belief = flatten_belief(init_mu, init_chol)
-goal_state = jnp.array([0.0])
-
-key = jr.PRNGKey(1337)
-key, control_key = jr.split(key, 2)
-control = 1e-4 * jr.normal(control_key, shape=(horizon, action_dim))
-
-options = bsp_ilqr.Hyperparameters()
-
-trajectory, control, trace = bsp_ilqr.jax_solver(
-    final_belief_cost,
-    transient_belief_cost,
-    goal_state,
-    belief_dynamics,
-    init_belief,
-    control,
-    action_space,
-    horizon,
-    options,
-)
-
-bel_mu, bel_chol = vmap(unflatten_belief, in_axes=(0,))(trajectory)
-bel_cov = jnp.einsum("nkh,ndl->nkd", bel_chol, bel_chol)
-
-plt.subplot(3, 1, 1)
-plt.plot(bel_mu[:, 0])
-plt.ylabel("m")
-plt.subplot(3, 1, 2)
-plt.plot(bel_cov[:, 0, 0])
-plt.ylabel("s")
-plt.subplot(3, 1, 3)
-plt.plot(control)
-plt.ylabel("u")
-plt.xlabel("t")
-plt.show()
-
 bayes_filter = sqrt_kalman_filter(
     dynamics,
     state_space,
@@ -167,10 +148,26 @@ bayes_filter = sqrt_kalman_filter(
     unflatten_belief,
 )
 
-state_key, key = jr.split(key, 2)
+nb_steps = 100
+horizon = 50
+
+init_mu = jnp.array([5.0, 5.0, jnp.pi, 0.0])
+init_chol = jnp.eye(state_dim) * 1.0
+
+init_belief = flatten_belief(init_mu, init_chol)
+goal_state = jnp.array([0.0, 0.0, 0.0, 0.0])
+
+key = jr.PRNGKey(1337)
+key, control_key = jr.split(key, 2)
+control = 1e-4 * jr.normal(control_key, shape=(horizon, action_dim))
+
+key, state_key = jr.split(key, 2)
 init_state = jr.multivariate_normal(state_key, mean=init_mu, cov=init_chol @ init_chol.T)
 
-state, belief, action, cost = bsp_ilqr.approximate_closed_loop_rollout(
+options = bsp_ilqr.Hyperparameters(max_iter=250)
+
+start = clock()
+state, belief, action, cost = bsp_ilqr.approximate_mpc_rollout(
     final_belief_cost,
     transient_belief_cost,
     goal_state,
@@ -185,22 +182,37 @@ state, belief, action, cost = bsp_ilqr.approximate_closed_loop_rollout(
     control,
     action_space,
     horizon,
+    nb_steps,
     options,
     key,
 )
+end = clock()
+print(end - start)
 
 bel_mu, bel_chol = vmap(unflatten_belief, in_axes=(0,))(belief)
 bel_cov = jnp.einsum("nkh,ndl->nkd", bel_chol, bel_chol)
 
-plt.subplot(3, 1, 1)
+plt.subplot(6, 1, 1)
 plt.plot(state[:, 0])
-plt.plot(bel_mu[:, 0], color='r')
-plt.ylabel("x/m")
-plt.subplot(3, 1, 2)
-plt.plot(bel_cov[:, 0, 0])
-plt.ylabel("s")
-plt.subplot(3, 1, 3)
+plt.plot(bel_mu[:, 0], color="r")
+plt.ylabel("x")
+plt.subplot(6, 1, 2)
+plt.plot(state[:, 1])
+plt.plot(bel_mu[:, 1], color="r")
+plt.ylabel("y")
+plt.subplot(6, 1, 3)
+plt.plot(state[:, 2])
+plt.plot(bel_mu[:, 2], color="r")
+plt.ylabel("r")
+plt.subplot(6, 1, 4)
+plt.plot(state[:, 3])
+plt.plot(bel_mu[:, 3], color="r")
+plt.ylabel("v")
+plt.subplot(6, 1, 5)
 plt.plot(action[:, 0])
-plt.ylabel("u")
+plt.ylabel("u1")
+plt.subplot(6, 1, 6)
+plt.plot(action[:, 1])
+plt.ylabel("u2")
 plt.xlabel("t")
 plt.show()

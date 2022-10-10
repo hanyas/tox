@@ -117,7 +117,17 @@ belief_dynamics = sqrt_kalman_filter_dynamics(
     unflatten_belief,
 )
 
-horizon = 100
+bayes_filter = sqrt_kalman_filter(
+    dynamics,
+    state_space,
+    observation,
+    observation_space,
+    flatten_belief,
+    unflatten_belief,
+)
+
+nb_steps = 150
+horizon = 50
 
 init_mu = jnp.array([-5.0])
 init_chol = jnp.eye(state_dim) * 1.0
@@ -129,48 +139,12 @@ key = jr.PRNGKey(1337)
 key, control_key = jr.split(key, 2)
 control = 1e-4 * jr.normal(control_key, shape=(horizon, action_dim))
 
-options = bsp_ilqr.Hyperparameters()
-
-trajectory, control, trace = bsp_ilqr.jax_solver(
-    final_belief_cost,
-    transient_belief_cost,
-    goal_state,
-    belief_dynamics,
-    init_belief,
-    control,
-    action_space,
-    horizon,
-    options,
-)
-
-bel_mu, bel_chol = vmap(unflatten_belief, in_axes=(0,))(trajectory)
-bel_cov = jnp.einsum("nkh,ndl->nkd", bel_chol, bel_chol)
-
-plt.subplot(3, 1, 1)
-plt.plot(bel_mu[:, 0])
-plt.ylabel("m")
-plt.subplot(3, 1, 2)
-plt.plot(bel_cov[:, 0, 0])
-plt.ylabel("s")
-plt.subplot(3, 1, 3)
-plt.plot(control)
-plt.ylabel("u")
-plt.xlabel("t")
-plt.show()
-
-bayes_filter = sqrt_kalman_filter(
-    dynamics,
-    state_space,
-    observation,
-    observation_space,
-    flatten_belief,
-    unflatten_belief,
-)
-
-state_key, key = jr.split(key, 2)
+key, state_key = jr.split(key, 2)
 init_state = jr.multivariate_normal(state_key, mean=init_mu, cov=init_chol @ init_chol.T)
 
-state, belief, action, cost = bsp_ilqr.approximate_closed_loop_rollout(
+options = bsp_ilqr.Hyperparameters()
+
+state, belief, action, cost = bsp_ilqr.approximate_mpc_rollout(
     final_belief_cost,
     transient_belief_cost,
     goal_state,
@@ -185,6 +159,7 @@ state, belief, action, cost = bsp_ilqr.approximate_closed_loop_rollout(
     control,
     action_space,
     horizon,
+    nb_steps,
     options,
     key,
 )
