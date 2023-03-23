@@ -53,6 +53,13 @@ class LinearDynamics(NamedTuple):
     c: jnp.ndarray
 
 
+class LinearGaussianDynamics(NamedTuple):
+    A: jnp.ndarray
+    B: jnp.ndarray
+    c: jnp.ndarray
+    sigma: jnp.ndarray
+
+
 class QuadraticDynamics(NamedTuple):
     fxx: jnp.ndarray
     fuu: jnp.ndarray
