@@ -89,6 +89,7 @@ def solver(
     state_space: Box,
     action_space: Box,
     risk_param: float,
+    noise_var: float,
     goal_state: jnp.ndarray,
     horizon: int,
 ) -> LinearPolicy:
